@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Crown, Coins, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
 
 interface Participant {
   id: string;
   name: string;
+  isCaptain: boolean;
+  teamId?: string;
 }
 
 interface Team {
@@ -20,12 +21,7 @@ interface Team {
   members: string[];
 }
 
-interface TeamDraftProps {
-  competitionId: string;
-  competitionCode?: string;
-}
-
-const TeamDraft = ({ competitionId }: TeamDraftProps) => {
+const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [newParticipantName, setNewParticipantName] = useState('');
   const [teams, setTeams] = useState<Team[]>([]);
@@ -38,53 +34,20 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
   const [draftComplete, setDraftComplete] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, [competitionId]);
-
-  const loadData = async () => {
-    try {
-      // Load teams
-      const { data: teamsData, error: teamsError } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('competition_id', competitionId);
-
-      if (teamsError) throw teamsError;
-
-      // Load participants for each team
-      const teamsWithMembers = [];
-      for (const team of teamsData || []) {
-        const { data: participantsData } = await supabase
-          .from('participants')
-          .select('*')
-          .eq('team_id', team.id);
-
-        teamsWithMembers.push({
-          ...team,
-          members: (participantsData || []).map(p => p.name)
-        });
-      }
-
-      setTeams(teamsWithMembers);
-
-      // Check if draft is complete
-      if (teamsWithMembers.length === 2 && teamsWithMembers.every(t => t.members.length > 0)) {
-        setDraftComplete(true);
-      }
-
-      // Load remaining participants (not on any team)
-      const allParticipantNames = teamsWithMembers.flatMap(t => [...t.members, t.captain]);
-      // For now, we'll keep track of available participants in state
-      // In a real app, you might have a separate participants table
-      
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load team data",
-        variant: "destructive"
-      });
+    // Load data from localStorage
+    const draftData = localStorage.getItem(`draft_${competitionCode}`);
+    if (draftData) {
+      const data = JSON.parse(draftData);
+      setParticipants(data.participants || []);
+      setTeams(data.teams || []);
+      setDraftActive(data.draftActive || false);
+      setCurrentPick(data.currentPick || '');
+      setDraftComplete(data.draftComplete || false);
     }
+  }, [competitionCode]);
+
+  const saveData = (data: any) => {
+    localStorage.setItem(`draft_${competitionCode}`, JSON.stringify(data));
   };
 
   const addParticipant = () => {
@@ -92,49 +55,41 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
     
     const newParticipant: Participant = {
       id: Date.now().toString(),
-      name: newParticipantName.trim()
+      name: newParticipantName.trim(),
+      isCaptain: false
     };
     
-    setParticipants([...participants, newParticipant]);
+    const updatedParticipants = [...participants, newParticipant];
+    setParticipants(updatedParticipants);
     setNewParticipantName('');
+    
+    saveData({ participants: updatedParticipants, teams, draftActive, currentPick, draftComplete });
   };
 
-  const makeCaptain = async (participantId: string) => {
+  const makeCaptain = (participantId: string) => {
     if (teams.length >= 2) return;
     
     const participant = participants.find(p => p.id === participantId);
     if (!participant) return;
 
-    try {
-      const { data, error } = await supabase
-        .from('teams')
-        .insert([{
-          competition_id: competitionId,
-          name: `Team ${participant.name}`,
-          captain: participant.name,
-          total_score: 0
-        }])
-        .select()
-        .single();
+    const newTeam: Team = {
+      id: Date.now().toString(),
+      name: `Team ${participant.name}`,
+      captain: participant.name,
+      members: []
+    };
 
-      if (error) throw error;
+    const updatedTeams = [...teams, newTeam];
+    const updatedParticipants = participants.map(p => 
+      p.id === participantId 
+        ? { ...p, isCaptain: true, teamId: newTeam.id }
+        : p
+    ).filter(p => p.id !== participantId);
 
-      toast({
-        title: "👑 Captain Selected!",
-        description: `${participant.name} is now a team captain`,
-      });
-
-      // Remove participant from available list
-      setParticipants(participants.filter(p => p.id !== participantId));
-      loadData();
-    } catch (error) {
-      console.error('Error creating team:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create team",
-        variant: "destructive"
-      });
-    }
+    setTeams(updatedTeams);
+    setParticipants(updatedParticipants);
+    
+    saveData({ participants: updatedParticipants, teams: updatedTeams, draftActive, currentPick, draftComplete });
   };
 
   const startDraft = () => {
@@ -157,56 +112,50 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
         setCoinFlipVisible(false);
         setDraftActive(true);
         setShowConfetti(false);
+        
+        const data = { participants, teams, draftActive: true, currentPick: winner.id, draftComplete };
+        saveData(data);
       }, 3000);
     }, 2000);
   };
 
-  const draftPlayer = async (participantId: string, teamId: string) => {
+  const draftPlayer = (participantId: string, teamId: string) => {
     if (!draftActive || currentPick !== teamId) return;
     
     const participant = participants.find(p => p.id === participantId);
     if (!participant) return;
 
-    try {
-      // Add participant to team
-      const { error } = await supabase
-        .from('participants')
-        .insert([{
-          team_id: teamId,
-          name: participant.name
-        }]);
+    const updatedTeams = teams.map(team => 
+      team.id === teamId 
+        ? { ...team, members: [...team.members, participant.name] }
+        : team
+    );
 
-      if (error) throw error;
-
-      // Remove from available participants
-      setParticipants(participants.filter(p => p.id !== participantId));
-      
-      // Switch to next team
-      const nextTeam = teams.find(t => t.id !== teamId);
-      const nextPick = participants.length > 1 ? nextTeam?.id || '' : '';
-      
-      setCurrentPick(nextPick);
-      
-      if (participants.length <= 1) {
-        setDraftActive(false);
-        setDraftComplete(true);
-      }
-
-      toast({
-        title: "🎯 Player Drafted!",
-        description: `${participant.name} joined ${teams.find(t => t.id === teamId)?.name}`,
-      });
-
-      loadData();
-    } catch (error) {
-      console.error('Error drafting player:', error);
-      toast({
-        title: "Error",
-        description: "Failed to draft player",
-        variant: "destructive"
-      });
+    const updatedParticipants = participants.filter(p => p.id !== participantId);
+    
+    // Switch to next team
+    const nextTeam = teams.find(t => t.id !== teamId);
+    const nextPick = updatedParticipants.length > 0 ? nextTeam?.id || '' : '';
+    
+    setTeams(updatedTeams);
+    setParticipants(updatedParticipants);
+    setCurrentPick(nextPick);
+    
+    if (updatedParticipants.length === 0) {
+      setDraftActive(false);
+      setDraftComplete(true);
     }
+    
+    saveData({ 
+      participants: updatedParticipants, 
+      teams: updatedTeams, 
+      draftActive: updatedParticipants.length > 0, 
+      currentPick: nextPick,
+      draftComplete: updatedParticipants.length === 0
+    });
   };
+
+  const availableParticipants = participants.filter(p => !p.isCaptain);
 
   return (
     <div className="space-y-6">
@@ -214,7 +163,7 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
       <Dialog open={coinFlipVisible}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-center">🪙 Coin Flip for First Pick</DialogTitle>
+            <DialogTitle className="text-center">Coin Flip for First Pick</DialogTitle>
             <DialogDescription className="text-center">
               {teams[0]?.name} = Heads | {teams[1]?.name} = Tails
             </DialogDescription>
@@ -223,8 +172,8 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
             {!coinFlipping && !coinResult && (
               <>
                 <Coins className={`h-24 w-24 text-yellow-500`} />
-                <Button onClick={flipCoin} size="lg" className="bg-yellow-500 hover:bg-yellow-600">
-                  🎲 Click to Flip!
+                <Button onClick={flipCoin} size="lg">
+                  Click to Flip!
                 </Button>
               </>
             )}
@@ -232,7 +181,7 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
             {coinFlipping && (
               <>
                 <Coins className={`h-24 w-24 text-yellow-500 animate-spin`} />
-                <p className="text-center">🌪️ Flipping...</p>
+                <p className="text-center">Flipping...</p>
               </>
             )}
             
@@ -251,31 +200,29 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
 
       {/* Draft Complete Summary */}
       {draftComplete && (
-        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+        <Card className="border-green-200 bg-green-50">
           <CardHeader>
-            <CardTitle className="text-green-800 flex items-center text-xl">
-              <Crown className="h-6 w-6 mr-2" />
-              🎉 Draft Complete!
+            <CardTitle className="text-green-800 flex items-center">
+              <Crown className="h-5 w-5 mr-2" />
+              Draft Complete!
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-4">
               {teams.map(team => (
-                <div key={team.id} className="bg-white p-4 rounded-lg border shadow-sm">
+                <div key={team.id} className="bg-white p-4 rounded-lg border">
                   <h3 className="font-bold text-lg mb-2 flex items-center">
                     <Crown className="h-4 w-4 mr-1 text-yellow-500" />
                     {team.name}
                   </h3>
-                  <p className="text-sm text-gray-600 mb-2">👑 Captain: {team.captain}</p>
+                  <p className="text-sm text-gray-600 mb-2">Captain: {team.captain}</p>
                   <div className="space-y-1">
                     {team.members.map(member => (
-                      <Badge key={member} variant="secondary" className="mr-1 mb-1">
-                        👤 {member}
-                      </Badge>
+                      <Badge key={member} variant="secondary">{member}</Badge>
                     ))}
                   </div>
                   <p className="text-sm text-gray-500 mt-2">
-                    👥 Total: {team.members.length + 1} players
+                    Total: {team.members.length + 1} players
                   </p>
                 </div>
               ))}
@@ -286,14 +233,14 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
 
       {/* Draft Status */}
       {draftActive && !draftComplete && (
-        <Card className="border-red-200 bg-gradient-to-r from-red-50 to-pink-50">
+        <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="text-center">
-              <Badge variant="destructive" className="animate-pulse mb-2 text-lg px-4 py-2">
-                🔴 DRAFT LIVE
+              <Badge variant="destructive" className="animate-pulse mb-2">
+                DRAFT LIVE
               </Badge>
               <p className="text-lg font-semibold">
-                🎯 {teams.find(t => t.id === currentPick)?.name}'s turn to pick
+                {teams.find(t => t.id === currentPick)?.name}'s turn to pick
               </p>
             </div>
           </CardContent>
@@ -303,11 +250,9 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
       <div className="grid lg:grid-cols-4 gap-6">
         {/* Left Sidebar - Participants */}
         <div className="lg:col-span-1">
-          <Card className="shadow-md">
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
-                👥 Participants
-              </CardTitle>
+              <CardTitle>Participants</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex space-x-2">
@@ -317,18 +262,18 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
                   onChange={(e) => setNewParticipantName(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && addParticipant()}
                 />
-                <Button onClick={addParticipant} size="sm" className="bg-green-600 hover:bg-green-700">
+                <Button onClick={addParticipant} size="sm">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
               
               <div className="space-y-2">
-                {participants.map(participant => (
+                {availableParticipants.map(participant => (
                   <div 
                     key={participant.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-sm ${
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                       draftActive 
-                        ? 'hover:bg-blue-50 border-blue-200 hover:border-blue-300' 
+                        ? 'hover:bg-blue-50 border-blue-200' 
                         : 'hover:bg-gray-50'
                     }`}
                     onClick={() => {
@@ -337,9 +282,9 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
                       }
                     }}
                   >
-                    <p className="font-medium">👤 {participant.name}</p>
+                    <p className="font-medium">{participant.name}</p>
                     {!draftActive && teams.length < 2 && (
-                      <p className="text-xs text-gray-500">👑 Click to make captain</p>
+                      <p className="text-xs text-gray-500">Click to make captain</p>
                     )}
                   </div>
                 ))}
@@ -354,10 +299,10 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
             {teams.map(team => (
               <Card 
                 key={team.id}
-                className={`shadow-md transition-all ${
+                className={`${
                   draftActive && currentPick === team.id 
-                    ? 'border-blue-500 bg-blue-50 shadow-lg' 
-                    : 'hover:shadow-lg'
+                    ? 'border-blue-500 bg-blue-50' 
+                    : ''
                 }`}
               >
                 <CardHeader>
@@ -368,27 +313,27 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    <Badge variant="outline" className="bg-yellow-50">👑 Captain: {team.captain}</Badge>
+                    <Badge variant="outline">Captain: {team.captain}</Badge>
                     {team.members.map(member => (
-                      <Badge key={member} variant="secondary">👤 {member}</Badge>
+                      <Badge key={member} variant="secondary">{member}</Badge>
                     ))}
                   </div>
                   
-                  {draftActive && currentPick === team.id && participants.length > 0 && (
+                  {draftActive && currentPick === team.id && availableParticipants.length > 0 && (
                     <div className="mt-4 p-3 bg-white rounded border-2 border-dashed border-blue-300">
                       <p className="text-sm text-blue-600 font-medium mb-2">
-                        🎯 Your turn to pick:
+                        Drag a player here or click to select:
                       </p>
                       <div className="space-y-1">
-                        {participants.map(participant => (
+                        {availableParticipants.map(participant => (
                           <Button
                             key={participant.id}
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start hover:bg-blue-100"
+                            className="w-full justify-start"
                             onClick={() => draftPlayer(participant.id, team.id)}
                           >
-                            👤 {participant.name}
+                            {participant.name}
                           </Button>
                         ))}
                       </div>
@@ -399,23 +344,22 @@ const TeamDraft = ({ competitionId }: TeamDraftProps) => {
             ))}
             
             {teams.length < 2 && (
-              <Card className="border-dashed border-gray-300 shadow-md">
+              <Card className="border-dashed border-gray-300">
                 <CardContent className="pt-6">
                   <div className="text-center text-gray-500">
                     <Crown className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-lg">👑 Select captains from participants</p>
-                    <p className="text-sm">Click on participants to make them captains</p>
+                    <p>Select captains from participants</p>
                   </div>
                 </CardContent>
               </Card>
             )}
           </div>
 
-          {teams.length === 2 && !draftActive && !draftComplete && participants.length > 0 && (
+          {teams.length === 2 && !draftActive && !draftComplete && (
             <div className="mt-6 text-center">
-              <Button onClick={startDraft} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-4 text-lg">
-                <Coins className="h-5 w-5 mr-2" />
-                🚀 Start Draft
+              <Button onClick={startDraft} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500">
+                <Coins className="h-4 w-4 mr-2" />
+                Start Draft
               </Button>
             </div>
           )}

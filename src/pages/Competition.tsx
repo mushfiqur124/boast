@@ -6,55 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Share2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import TeamDraft from '@/components/TeamDraft';
 import Activities from '@/components/Activities';
 import Scoring from '@/components/Scoring';
 import Dashboard from '@/components/Dashboard';
 
-interface Competition {
-  id: string;
-  name: string;
-  code: string;
-}
-
 const Competition = () => {
   const { code } = useParams();
-  const [competition, setCompetition] = useState<Competition | null>(null);
+  const [competition, setCompetition] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (code) {
-      loadCompetition();
-    }
-  }, [code]);
-
-  const loadCompetition = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('competitions')
-        .select('*')
-        .eq('code', code)
-        .single();
-
-      if (error) throw error;
-      setCompetition(data);
-    } catch (error) {
-      console.error('Error loading competition:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load competition",
-        variant: "destructive"
-      });
-    } finally {
+      const competitionData = localStorage.getItem(`competition_${code}`);
+      if (competitionData) {
+        setCompetition(JSON.parse(competitionData));
+      }
       setLoading(false);
     }
-  };
+  }, [code]);
 
   const copyCodeToClipboard = () => {
     navigator.clipboard.writeText(code || '');
     toast({
-      title: "📋 Code copied!",
+      title: "Code copied!",
       description: "Competition code copied to clipboard",
     });
   };
@@ -74,10 +49,10 @@ const Competition = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">🔍 Competition Not Found</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Competition Not Found</h1>
           <p className="text-gray-600 mb-4">The competition code "{code}" could not be found.</p>
           <Button onClick={() => window.location.href = '/'}>
-            🏠 Return to Home
+            Return to Home
           </Button>
         </div>
       </div>
@@ -91,11 +66,9 @@ const Competition = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-                🏆 {competition.name}
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-800">{competition.name}</h1>
               <div className="flex items-center space-x-2 mt-1">
-                <Badge variant="outline" className="font-mono text-lg px-3 py-1">
+                <Badge variant="outline" className="font-mono">
                   {code}
                 </Badge>
                 <Button
@@ -119,27 +92,27 @@ const Competition = () => {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
         <Tabs defaultValue="draft" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6 bg-white shadow-sm">
-            <TabsTrigger value="draft" className="data-[state=active]:bg-blue-100">👥 Team Draft</TabsTrigger>
-            <TabsTrigger value="activities" className="data-[state=active]:bg-green-100">🏃‍♂️ Activities</TabsTrigger>
-            <TabsTrigger value="scoring" className="data-[state=active]:bg-purple-100">⚙️ Scoring</TabsTrigger>
-            <TabsTrigger value="dashboard" className="data-[state=active]:bg-yellow-100">📊 Dashboard</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsTrigger value="draft">Team Draft</TabsTrigger>
+            <TabsTrigger value="activities">Activities</TabsTrigger>
+            <TabsTrigger value="scoring">Scoring</TabsTrigger>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           </TabsList>
 
           <TabsContent value="draft">
-            <TeamDraft competitionId={competition.id} competitionCode={code} />
+            <TeamDraft competitionCode={code} />
           </TabsContent>
 
           <TabsContent value="activities">
-            <Activities competitionId={competition.id} competitionCode={code} />
+            <Activities competitionCode={code} />
           </TabsContent>
 
           <TabsContent value="scoring">
-            <Scoring competitionId={competition.id} competitionCode={code} />
+            <Scoring competitionCode={code} />
           </TabsContent>
 
           <TabsContent value="dashboard">
-            <Dashboard competitionId={competition.id} competitionCode={code} />
+            <Dashboard competitionCode={code} />
           </TabsContent>
         </Tabs>
       </div>
