@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Share2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import TeamDraft from '@/components/TeamDraft';
 import Activities from '@/components/Activities';
 import Scoring from '@/components/Scoring';
@@ -18,13 +19,31 @@ const Competition = () => {
 
   useEffect(() => {
     if (code) {
-      const competitionData = localStorage.getItem(`competition_${code}`);
-      if (competitionData) {
-        setCompetition(JSON.parse(competitionData));
-      }
-      setLoading(false);
+      loadCompetition();
     }
   }, [code]);
+
+  const loadCompetition = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('competitions')
+        .select('*')
+        .eq('code', code)
+        .single();
+
+      if (error) {
+        console.error('Error loading competition:', error);
+        setCompetition(null);
+      } else {
+        setCompetition(data);
+      }
+    } catch (error) {
+      console.error('Error loading competition:', error);
+      setCompetition(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const copyCodeToClipboard = () => {
     navigator.clipboard.writeText(code || '');
@@ -100,19 +119,19 @@ const Competition = () => {
           </TabsList>
 
           <TabsContent value="draft">
-            <TeamDraft competitionCode={code} />
+            <TeamDraft competitionCode={code} competitionId={competition.id} />
           </TabsContent>
 
           <TabsContent value="activities">
-            <Activities competitionCode={code} />
+            <Activities competitionCode={code} competitionId={competition.id} />
           </TabsContent>
 
           <TabsContent value="scoring">
-            <Scoring competitionCode={code} />
+            <Scoring competitionCode={code} competitionId={competition.id} />
           </TabsContent>
 
           <TabsContent value="dashboard">
-            <Dashboard competitionCode={code} />
+            <Dashboard competitionCode={code} competitionId={competition.id} />
           </TabsContent>
         </Tabs>
       </div>

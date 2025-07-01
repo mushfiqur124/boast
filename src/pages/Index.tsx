@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Trophy, Users, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [competitionName, setCompetitionName] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const generateCompetitionCode = () => {
@@ -23,30 +25,74 @@ const Index = () => {
     return result;
   };
 
-  const handleCreateCompetition = () => {
+  const handleCreateCompetition = async () => {
     if (!competitionName.trim()) return;
     
-    const code = generateCompetitionCode();
-    const competition = {
-      id: Date.now().toString(),
-      name: competitionName,
-      code: code,
-      createdAt: new Date().toISOString()
-    };
-    
-    // Store in localStorage for now (will be replaced with Supabase)
-    localStorage.setItem(`competition_${code}`, JSON.stringify(competition));
-    navigate(`/competition/${code}`);
+    setLoading(true);
+    try {
+      const code = generateCompetitionCode();
+      
+      const { data, error } = await supabase
+        .from('competitions')
+        .insert([
+          {
+            name: competitionName.trim(),
+            code: code
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Competition Created!",
+        description: `Competition "${competitionName}" created with code ${code}`,
+      });
+
+      navigate(`/competition/${code}`);
+    } catch (error) {
+      console.error('Error creating competition:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create competition. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleJoinCompetition = () => {
+  const handleJoinCompetition = async () => {
     if (!joinCode.trim()) return;
     
-    const competition = localStorage.getItem(`competition_${joinCode.toUpperCase()}`);
-    if (competition) {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('competitions')
+        .select('*')
+        .eq('code', joinCode.toUpperCase())
+        .single();
+
+      if (error) {
+        toast({
+          title: "Competition Not Found",
+          description: "Please check the code and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       navigate(`/competition/${joinCode.toUpperCase()}`);
-    } else {
-      alert('Competition not found. Please check the code and try again.');
+    } catch (error) {
+      console.error('Error joining competition:', error);
+      toast({
+        title: "Error",
+        description: "Failed to join competition. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -96,9 +142,9 @@ const Index = () => {
               <Button 
                 onClick={handleCreateCompetition}
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
-                disabled={!competitionName.trim()}
+                disabled={!competitionName.trim() || loading}
               >
-                Create Competition
+                {loading ? "Creating..." : "Create Competition"}
               </Button>
             </CardContent>
           </Card>
@@ -132,9 +178,9 @@ const Index = () => {
               <Button 
                 onClick={handleJoinCompetition}
                 className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white"
-                disabled={joinCode.length !== 6}
+                disabled={joinCode.length !== 6 || loading}
               >
-                Join Competition
+                {loading ? "Joining..." : "Join Competition"}
               </Button>
             </CardContent>
           </Card>

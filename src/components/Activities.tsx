@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Plus, Trophy, Users, Edit } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import ScoreEntry from './ScoreEntry';
 
 interface Activity {
   id: string;
@@ -15,10 +18,9 @@ interface Activity {
   type: 'team' | 'individual';
   unit?: string;
   completed: boolean;
-  scores?: any;
 }
 
-const Activities = ({ competitionCode }: { competitionCode: string }) => {
+const Activities = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [newActivity, setNewActivity] = useState({
     name: '',
@@ -26,35 +28,70 @@ const Activities = ({ competitionCode }: { competitionCode: string }) => {
     unit: ''
   });
   const [isAddingActivity, setIsAddingActivity] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const activitiesData = localStorage.getItem(`activities_${competitionCode}`);
-    if (activitiesData) {
-      setActivities(JSON.parse(activitiesData));
-    }
-  }, [competitionCode]);
+    loadActivities();
+  }, [competitionId]);
 
-  const saveActivities = (updatedActivities: Activity[]) => {
-    setActivities(updatedActivities);
-    localStorage.setItem(`activities_${competitionCode}`, JSON.stringify(updatedActivities));
+  const loadActivities = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('competition_id', competitionId);
+
+      if (error) throw error;
+
+      setActivities(data || []);
+    } catch (error) {
+      console.error('Error loading activities:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load activities",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addActivity = () => {
+  const addActivity = async () => {
     if (!newActivity.name.trim()) return;
 
-    const activity: Activity = {
-      id: Date.now().toString(),
-      name: newActivity.name,
-      type: newActivity.type,
-      unit: newActivity.unit || undefined,
-      completed: false
-    };
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .insert([
+          {
+            competition_id: competitionId,
+            name: newActivity.name,
+            type: newActivity.type,
+            unit: newActivity.unit || null
+          }
+        ])
+        .select()
+        .single();
 
-    const updatedActivities = [...activities, activity];
-    saveActivities(updatedActivities);
-    
-    setNewActivity({ name: '', type: 'team', unit: '' });
-    setIsAddingActivity(false);
+      if (error) throw error;
+
+      setActivities([...activities, data]);
+      setNewActivity({ name: '', type: 'team', unit: '' });
+      setIsAddingActivity(false);
+
+      toast({
+        title: "Activity Added",
+        description: `${newActivity.name} has been added to the competition`,
+      });
+    } catch (error) {
+      console.error('Error adding activity:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add activity",
+        variant: "destructive",
+      });
+    }
   };
 
   const presetActivities = [
@@ -69,18 +106,42 @@ const Activities = ({ competitionCode }: { competitionCode: string }) => {
     { name: 'Mario Kart', type: 'team', unit: '' },
   ];
 
-  const addPresetActivity = (preset: any) => {
-    const activity: Activity = {
-      id: Date.now().toString(),
-      name: preset.name,
-      type: preset.type as 'team' | 'individual',
-      unit: preset.unit || undefined,
-      completed: false
-    };
+  const addPresetActivity = async (preset: any) => {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .insert([
+          {
+            competition_id: competitionId,
+            name: preset.name,
+            type: preset.type,
+            unit: preset.unit || null
+          }
+        ])
+        .select()
+        .single();
 
-    const updatedActivities = [...activities, activity];
-    saveActivities(updatedActivities);
+      if (error) throw error;
+
+      setActivities([...activities, data]);
+
+      toast({
+        title: "Activity Added",
+        description: `${preset.name} has been added to the competition`,
+      });
+    } catch (error) {
+      console.error('Error adding preset activity:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add activity",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (loading) {
+    return <div className="flex items-center justify-center p-8">Loading activities...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -223,7 +284,11 @@ const Activities = ({ competitionCode }: { competitionCode: string }) => {
                     </div>
                   </div>
                   <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedActivity(activity)}
+                    >
                       <Edit className="h-3 w-3 mr-1" />
                       {activity.completed ? 'Edit Scores' : 'Enter Scores'}
                     </Button>
@@ -234,6 +299,16 @@ const Activities = ({ competitionCode }: { competitionCode: string }) => {
           ))
         )}
       </div>
+
+      {/* Score Entry Modal */}
+      {selectedActivity && (
+        <ScoreEntry
+          activity={selectedActivity}
+          competitionId={competitionId}
+          onClose={() => setSelectedActivity(null)}
+          onScoresUpdated={loadActivities}
+        />
+      )}
     </div>
   );
 };

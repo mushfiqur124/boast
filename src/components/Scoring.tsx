@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Settings, Save } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface ScoringRules {
   teamWin: number;
@@ -15,7 +17,7 @@ interface ScoringRules {
   lastPlace: number;
 }
 
-const Scoring = ({ competitionCode }: { competitionCode: string }) => {
+const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [scoringRules, setScoringRules] = useState<ScoringRules>({
     teamWin: 50,
     teamLoss: 0,
@@ -27,6 +29,8 @@ const Scoring = ({ competitionCode }: { competitionCode: string }) => {
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
+    // Load scoring rules from localStorage for now
+    // In a full implementation, you might want to store these in the database
     const savedRules = localStorage.getItem(`scoring_${competitionCode}`);
     if (savedRules) {
       setScoringRules(JSON.parse(savedRules));
@@ -42,6 +46,10 @@ const Scoring = ({ competitionCode }: { competitionCode: string }) => {
   const saveRules = () => {
     localStorage.setItem(`scoring_${competitionCode}`, JSON.stringify(scoringRules));
     setHasChanges(false);
+    toast({
+      title: "Scoring Rules Saved",
+      description: "Your scoring configuration has been updated",
+    });
   };
 
   const resetToDefaults = () => {

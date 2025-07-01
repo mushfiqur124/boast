@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trophy, Crown, TrendingUp, Download, Medal, Star } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Team {
   id: string;
   name: string;
   captain: string;
-  members: string[];
-  totalScore: number;
+  total_score: number;
+  participants: Array<{ id: string; name: string }>;
 }
 
 interface Activity {
@@ -18,40 +19,57 @@ interface Activity {
   name: string;
   type: 'team' | 'individual';
   completed: boolean;
-  winner?: string;
 }
 
-const Dashboard = ({ competitionCode }: { competitionCode: string }) => {
+const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [competitionName, setCompetitionName] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load competition data
-    const competitionData = localStorage.getItem(`competition_${competitionCode}`);
-    if (competitionData) {
-      const comp = JSON.parse(competitionData);
-      setCompetitionName(comp.name);
-    }
+    loadDashboardData();
+  }, [competitionId]);
 
-    // Load teams data
-    const draftData = localStorage.getItem(`draft_${competitionCode}`);
-    if (draftData) {
-      const data = JSON.parse(draftData);
-      const teamsWithScores = (data.teams || []).map((team: any) => ({
-        ...team,
-        totalScore: Math.floor(Math.random() * 200) + 50 // Mock scores for demo
-      }));
-      setTeams(teamsWithScores);
-    }
+  const loadDashboardData = async () => {
+    try {
+      // Load competition info
+      const { data: competitionData, error: compError } = await supabase
+        .from('competitions')
+        .select('*')
+        .eq('id', competitionId)
+        .single();
 
-    // Load activities data
-    const activitiesData = localStorage.getItem(`activities_${competitionCode}`);
-    if (activitiesData) {
-      const activities = JSON.parse(activitiesData);
-      setActivities(activities);
+      if (compError) throw compError;
+      setCompetitionName(competitionData.name);
+
+      // Load teams with participants
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('teams')
+        .select(`
+          *,
+          participants (*)
+        `)
+        .eq('competition_id', competitionId);
+
+      if (teamsError) throw teamsError;
+      setTeams(teamsData || []);
+
+      // Load activities
+      const { data: activitiesData, error: activitiesError } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('competition_id', competitionId);
+
+      if (activitiesError) throw activitiesError;
+      setActivities(activitiesData || []);
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [competitionCode]);
+  };
 
   const exportToCSV = () => {
     const csvContent = [
@@ -61,13 +79,13 @@ const Dashboard = ({ competitionCode }: { competitionCode: string }) => {
       ['Team Rankings'],
       ['Rank', 'Team', 'Captain', 'Members', 'Score'],
       ...teams
-        .sort((a, b) => b.totalScore - a.totalScore)
+        .sort((a, b) => b.total_score - a.total_score)
         .map((team, index) => [
           index + 1,
           team.name,
           team.captain,
-          team.members.join('; '),
-          team.totalScore
+          team.participants.map(p => p.name).join('; '),
+          team.total_score
         ]),
       [''],
       ['Activities'],
@@ -88,8 +106,12 @@ const Dashboard = ({ competitionCode }: { competitionCode: string }) => {
     window.URL.revokeObjectURL(url);
   };
 
-  const sortedTeams = teams.sort((a, b) => b.totalScore - a.totalScore);
-  const scoreDifference = sortedTeams.length >= 2 ? sortedTeams[0].totalScore - sortedTeams[1].totalScore : 0;
+  if (loading) {
+    return <div className="flex items-center justify-center p-8">Loading dashboard...</div>;
+  }
+
+  const sortedTeams = teams.sort((a, b) => b.total_score - a.total_score);
+  const scoreDifference = sortedTeams.length >= 2 ? sortedTeams[0].total_score - sortedTeams[1].total_score : 0;
   const completedActivities = activities.filter(a => a.completed).length;
 
   return (
@@ -200,12 +222,12 @@ const Dashboard = ({ competitionCode }: { competitionCode: string }) => {
                         {index === 0 && <Crown className="h-4 w-4 ml-2 text-yellow-500" />}
                       </h3>
                       <p className="text-sm text-gray-600">
-                        Captain: {team.captain} • {team.members.length + 1} players
+                        Captain: {team.captain} • {team.participants.length + 1} players
                       </p>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {team.members.map(member => (
-                          <Badge key={member} variant="outline" className="text-xs">
-                            {member}
+                        {team.participants.map(member => (
+                          <Badge key={member.id} variant="outline" className="text-xs">
+                            {member.name}
                           </Badge>
                         ))}
                       </div>
@@ -215,7 +237,7 @@ const Dashboard = ({ competitionCode }: { competitionCode: string }) => {
                     <p className={`text-3xl font-bold ${
                       index === 0 ? 'text-yellow-600' : 'text-gray-700'
                     }`}>
-                      {team.totalScore}
+                      {team.total_score}
                     </p>
                     <p className="text-sm text-gray-500">points</p>
                   </div>
@@ -272,20 +294,6 @@ const Dashboard = ({ competitionCode }: { competitionCode: string }) => {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Individual Achievements (Mock Data) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Individual Achievements</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center text-gray-500 py-8">
-            <Star className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>Complete individual activities to see achievements</p>
-            <p className="text-sm">Track top performers and record holders</p>
-          </div>
         </CardContent>
       </Card>
     </div>

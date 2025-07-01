@@ -6,22 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Crown, Coins, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface Participant {
   id: string;
   name: string;
-  isCaptain: boolean;
-  teamId?: string;
+  team_id?: string;
 }
 
 interface Team {
   id: string;
   name: string;
   captain: string;
-  members: string[];
+  participants: Participant[];
 }
 
-const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
+const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [newParticipantName, setNewParticipantName] = useState('');
   const [teams, setTeams] = useState<Team[]>([]);
@@ -32,22 +33,60 @@ const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
   const [coinResult, setCoinResult] = useState<string>('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [draftComplete, setDraftComplete] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load data from localStorage
-    const draftData = localStorage.getItem(`draft_${competitionCode}`);
-    if (draftData) {
-      const data = JSON.parse(draftData);
-      setParticipants(data.participants || []);
-      setTeams(data.teams || []);
-      setDraftActive(data.draftActive || false);
-      setCurrentPick(data.currentPick || '');
-      setDraftComplete(data.draftComplete || false);
-    }
-  }, [competitionCode]);
+    loadData();
+  }, [competitionId]);
 
-  const saveData = (data: any) => {
-    localStorage.setItem(`draft_${competitionCode}`, JSON.stringify(data));
+  const loadData = async () => {
+    try {
+      // Load teams
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('teams')
+        .select(`
+          *,
+          participants (*)
+        `)
+        .eq('competition_id', competitionId);
+
+      if (teamsError) throw teamsError;
+
+      const formattedTeams = teamsData.map(team => ({
+        id: team.id,
+        name: team.name,
+        captain: team.captain,
+        participants: team.participants || []
+      }));
+
+      setTeams(formattedTeams);
+
+      // Load unassigned participants (those not in any team yet)
+      const assignedParticipantIds = formattedTeams.flatMap(team => 
+        team.participants.map(p => p.id)
+      );
+
+      // For now, we'll track unassigned participants in localStorage
+      // In a full implementation, you might want a separate table for this
+      const localParticipants = JSON.parse(localStorage.getItem(`unassigned_participants_${competitionCode}`) || '[]');
+      setParticipants(localParticipants);
+
+      // Check draft status from localStorage for now
+      const draftStatus = JSON.parse(localStorage.getItem(`draft_status_${competitionCode}`) || '{}');
+      setDraftActive(draftStatus.active || false);
+      setCurrentPick(draftStatus.currentPick || '');
+      setDraftComplete(draftStatus.complete || false);
+
+    } catch (error) {
+      console.error('Error loading draft data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load draft data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addParticipant = () => {
@@ -56,40 +95,65 @@ const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
     const newParticipant: Participant = {
       id: Date.now().toString(),
       name: newParticipantName.trim(),
-      isCaptain: false
     };
     
     const updatedParticipants = [...participants, newParticipant];
     setParticipants(updatedParticipants);
     setNewParticipantName('');
     
-    saveData({ participants: updatedParticipants, teams, draftActive, currentPick, draftComplete });
+    // Save to localStorage for now
+    localStorage.setItem(`unassigned_participants_${competitionCode}`, JSON.stringify(updatedParticipants));
   };
 
-  const makeCaptain = (participantId: string) => {
+  const makeCaptain = async (participantId: string) => {
     if (teams.length >= 2) return;
     
     const participant = participants.find(p => p.id === participantId);
     if (!participant) return;
 
-    const newTeam: Team = {
-      id: Date.now().toString(),
-      name: `Team ${participant.name}`,
-      captain: participant.name,
-      members: []
-    };
+    try {
+      const { data: teamData, error } = await supabase
+        .from('teams')
+        .insert([
+          {
+            competition_id: competitionId,
+            name: `Team ${participant.name}`,
+            captain: participant.name
+          }
+        ])
+        .select()
+        .single();
 
-    const updatedTeams = [...teams, newTeam];
-    const updatedParticipants = participants.map(p => 
-      p.id === participantId 
-        ? { ...p, isCaptain: true, teamId: newTeam.id }
-        : p
-    ).filter(p => p.id !== participantId);
+      if (error) throw error;
 
-    setTeams(updatedTeams);
-    setParticipants(updatedParticipants);
-    
-    saveData({ participants: updatedParticipants, teams: updatedTeams, draftActive, currentPick, draftComplete });
+      const newTeam: Team = {
+        id: teamData.id,
+        name: teamData.name,
+        captain: teamData.captain,
+        participants: []
+      };
+
+      const updatedTeams = [...teams, newTeam];
+      const updatedParticipants = participants.filter(p => p.id !== participantId);
+
+      setTeams(updatedTeams);
+      setParticipants(updatedParticipants);
+      
+      // Update localStorage
+      localStorage.setItem(`unassigned_participants_${competitionCode}`, JSON.stringify(updatedParticipants));
+
+      toast({
+        title: "Captain Selected",
+        description: `${participant.name} is now captain of ${newTeam.name}`,
+      });
+    } catch (error) {
+      console.error('Error creating team:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create team",
+        variant: "destructive",
+      });
+    }
   };
 
   const startDraft = () => {
@@ -113,49 +177,82 @@ const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
         setDraftActive(true);
         setShowConfetti(false);
         
-        const data = { participants, teams, draftActive: true, currentPick: winner.id, draftComplete };
-        saveData(data);
+        // Save draft status
+        localStorage.setItem(`draft_status_${competitionCode}`, JSON.stringify({
+          active: true,
+          currentPick: winner.id,
+          complete: false
+        }));
       }, 3000);
     }, 2000);
   };
 
-  const draftPlayer = (participantId: string, teamId: string) => {
+  const draftPlayer = async (participantId: string, teamId: string) => {
     if (!draftActive || currentPick !== teamId) return;
     
     const participant = participants.find(p => p.id === participantId);
     if (!participant) return;
 
-    const updatedTeams = teams.map(team => 
-      team.id === teamId 
-        ? { ...team, members: [...team.members, participant.name] }
-        : team
-    );
+    try {
+      // Add participant to team in database
+      const { error } = await supabase
+        .from('participants')
+        .insert([
+          {
+            team_id: teamId,
+            name: participant.name
+          }
+        ]);
 
-    const updatedParticipants = participants.filter(p => p.id !== participantId);
-    
-    // Switch to next team
-    const nextTeam = teams.find(t => t.id !== teamId);
-    const nextPick = updatedParticipants.length > 0 ? nextTeam?.id || '' : '';
-    
-    setTeams(updatedTeams);
-    setParticipants(updatedParticipants);
-    setCurrentPick(nextPick);
-    
-    if (updatedParticipants.length === 0) {
-      setDraftActive(false);
-      setDraftComplete(true);
+      if (error) throw error;
+
+      // Update local state
+      const updatedTeams = teams.map(team => 
+        team.id === teamId 
+          ? { ...team, participants: [...team.participants, { ...participant, team_id: teamId }] }
+          : team
+      );
+
+      const updatedParticipants = participants.filter(p => p.id !== participantId);
+      
+      // Switch to next team
+      const nextTeam = teams.find(t => t.id !== teamId);
+      const nextPick = updatedParticipants.length > 0 ? nextTeam?.id || '' : '';
+      
+      setTeams(updatedTeams);
+      setParticipants(updatedParticipants);
+      setCurrentPick(nextPick);
+      
+      if (updatedParticipants.length === 0) {
+        setDraftActive(false);
+        setDraftComplete(true);
+        toast({
+          title: "Draft Complete!",
+          description: "All players have been drafted to teams",
+        });
+      }
+      
+      // Update localStorage
+      localStorage.setItem(`unassigned_participants_${competitionCode}`, JSON.stringify(updatedParticipants));
+      localStorage.setItem(`draft_status_${competitionCode}`, JSON.stringify({
+        active: updatedParticipants.length > 0,
+        currentPick: nextPick,
+        complete: updatedParticipants.length === 0
+      }));
+
+    } catch (error) {
+      console.error('Error drafting player:', error);
+      toast({
+        title: "Error",
+        description: "Failed to draft player",
+        variant: "destructive",
+      });
     }
-    
-    saveData({ 
-      participants: updatedParticipants, 
-      teams: updatedTeams, 
-      draftActive: updatedParticipants.length > 0, 
-      currentPick: nextPick,
-      draftComplete: updatedParticipants.length === 0
-    });
   };
 
-  const availableParticipants = participants.filter(p => !p.isCaptain);
+  if (loading) {
+    return <div className="flex items-center justify-center p-8">Loading draft...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -217,12 +314,12 @@ const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
                   </h3>
                   <p className="text-sm text-gray-600 mb-2">Captain: {team.captain}</p>
                   <div className="space-y-1">
-                    {team.members.map(member => (
-                      <Badge key={member} variant="secondary">{member}</Badge>
+                    {team.participants.map(member => (
+                      <Badge key={member.id} variant="secondary">{member.name}</Badge>
                     ))}
                   </div>
                   <p className="text-sm text-gray-500 mt-2">
-                    Total: {team.members.length + 1} players
+                    Total: {team.participants.length + 1} players
                   </p>
                 </div>
               ))}
@@ -268,7 +365,7 @@ const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
               </div>
               
               <div className="space-y-2">
-                {availableParticipants.map(participant => (
+                {participants.map(participant => (
                   <div 
                     key={participant.id}
                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -314,18 +411,18 @@ const TeamDraft = ({ competitionCode }: { competitionCode: string }) => {
                 <CardContent>
                   <div className="space-y-2">
                     <Badge variant="outline">Captain: {team.captain}</Badge>
-                    {team.members.map(member => (
-                      <Badge key={member} variant="secondary">{member}</Badge>
+                    {team.participants.map(member => (
+                      <Badge key={member.id} variant="secondary">{member.name}</Badge>
                     ))}
                   </div>
                   
-                  {draftActive && currentPick === team.id && availableParticipants.length > 0 && (
+                  {draftActive && currentPick === team.id && participants.length > 0 && (
                     <div className="mt-4 p-3 bg-white rounded border-2 border-dashed border-blue-300">
                       <p className="text-sm text-blue-600 font-medium mb-2">
-                        Drag a player here or click to select:
+                        Click to select:
                       </p>
                       <div className="space-y-1">
-                        {availableParticipants.map(participant => (
+                        {participants.map(participant => (
                           <Button
                             key={participant.id}
                             variant="ghost"
