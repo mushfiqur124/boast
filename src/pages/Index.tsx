@@ -1,20 +1,21 @@
 
-import React from 'react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Trophy, Users, Zap } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from 'react-router-dom';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import { Trophy, Users } from "lucide-react";
 
 const Index = () => {
   const [competitionName, setCompetitionName] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const generateCompetitionCode = () => {
+  const generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 6; i++) {
@@ -23,36 +24,91 @@ const Index = () => {
     return result;
   };
 
-  const handleCreateCompetition = () => {
-    if (!competitionName.trim()) return;
-    
-    const code = generateCompetitionCode();
-    const competition = {
-      id: Date.now().toString(),
-      name: competitionName,
-      code: code,
-      createdAt: new Date().toISOString()
-    };
-    
-    // Store in localStorage for now (will be replaced with Supabase)
-    localStorage.setItem(`competition_${code}`, JSON.stringify(competition));
-    navigate(`/competition/${code}`);
+  const createCompetition = async () => {
+    if (!competitionName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a competition name",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const code = generateCode();
+      
+      const { data, error } = await supabase
+        .from('competitions')
+        .insert([
+          { name: competitionName.trim(), code }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "🎉 Competition Created!",
+        description: `Your competition code is: ${code}`,
+      });
+
+      navigate(`/competition/${code}`);
+    } catch (error) {
+      console.error('Error creating competition:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create competition. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleJoinCompetition = () => {
-    if (!joinCode.trim()) return;
-    
-    const competition = localStorage.getItem(`competition_${joinCode.toUpperCase()}`);
-    if (competition) {
-      navigate(`/competition/${joinCode.toUpperCase()}`);
-    } else {
-      alert('Competition not found. Please check the code and try again.');
+  const joinCompetition = async () => {
+    if (!joinCode.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a competition code",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('competitions')
+        .select('*')
+        .eq('code', joinCode.trim().toUpperCase())
+        .single();
+
+      if (error || !data) {
+        toast({
+          title: "Error",
+          description: "Competition not found. Please check your code.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      navigate(`/competition/${joinCode.trim().toUpperCase()}`);
+    } catch (error) {
+      console.error('Error joining competition:', error);
+      toast({
+        title: "Error",
+        description: "Failed to join competition. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center mb-4">
@@ -61,111 +117,103 @@ const Index = () => {
               Boast
             </h1>
           </div>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            The ultimate team competition organizer for friend groups. Draft teams, compete in activities, and crown the champions!
+          <p className="text-xl text-gray-600">
+            🏆 The ultimate team competition organizer for friend groups
           </p>
         </div>
 
-        {/* Main Action Cards */}
-        <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8 mb-12">
-          {/* Create New Competition */}
-          <Card className="relative overflow-hidden border-2 border-blue-200 hover:border-blue-300 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
-            <CardHeader className="relative">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Zap className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Start New Competition</CardTitle>
-                  <CardDescription>Create a fresh competition and gather your team</CardDescription>
-                </div>
+        {/* Action Cards */}
+        <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
+          {/* Create Competition */}
+          <Card className="border-2 hover:border-blue-300 transition-colors shadow-lg">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <Users className="h-8 w-8 text-blue-600" />
               </div>
+              <CardTitle className="text-2xl">Start New Competition</CardTitle>
+              <CardDescription className="text-base">
+                🚀 Create a fresh competition and invite your friends
+              </CardDescription>
             </CardHeader>
-            <CardContent className="relative space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="competition-name">Competition Name</Label>
-                <Input 
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="competition-name" className="text-sm font-medium">
+                  Competition Name
+                </Label>
+                <Input
                   id="competition-name"
-                  placeholder="e.g., Dawg Olympics 2024"
+                  placeholder="e.g., Summer Olympics 2024"
                   value={competitionName}
                   onChange={(e) => setCompetitionName(e.target.value)}
-                  className="border-blue-200 focus:border-blue-400"
+                  onKeyPress={(e) => e.key === 'Enter' && createCompetition()}
+                  className="mt-1"
                 />
               </div>
               <Button 
-                onClick={handleCreateCompetition}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
-                disabled={!competitionName.trim()}
+                onClick={createCompetition} 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-semibold"
+                disabled={loading}
               >
-                Create Competition
+                {loading ? "Creating..." : "🎯 Create Competition"}
               </Button>
             </CardContent>
           </Card>
 
-          {/* Join Existing Competition */}
-          <Card className="relative overflow-hidden border-2 border-green-200 hover:border-green-300 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-teal-500/5" />
-            <CardHeader className="relative">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Users className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Join Existing Competition</CardTitle>
-                  <CardDescription>Enter your competition code to join the action</CardDescription>
-                </div>
+          {/* Join Competition */}
+          <Card className="border-2 hover:border-green-300 transition-colors shadow-lg">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Trophy className="h-8 w-8 text-green-600" />
               </div>
+              <CardTitle className="text-2xl">Join Competition</CardTitle>
+              <CardDescription className="text-base">
+                🎲 Enter your competition code to join the fun
+              </CardDescription>
             </CardHeader>
-            <CardContent className="relative space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="join-code">Competition Code</Label>
-                <Input 
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="join-code" className="text-sm font-medium">
+                  Competition Code
+                </Label>
+                <Input
                   id="join-code"
-                  placeholder="Enter 6-character code"
+                  placeholder="Enter 6-digit code"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  className="border-green-200 focus:border-green-400 uppercase"
+                  onKeyPress={(e) => e.key === 'Enter' && joinCompetition()}
+                  className="mt-1 font-mono text-center text-lg tracking-wider"
                   maxLength={6}
                 />
               </div>
               <Button 
-                onClick={handleJoinCompetition}
-                className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white"
-                disabled={joinCode.length !== 6}
+                onClick={joinCompetition} 
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
+                disabled={loading}
               >
-                Join Competition
+                {loading ? "Joining..." : "🚪 Join Competition"}
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Features Preview */}
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
-            Everything you need for epic team competitions
-          </h2>
+        {/* Info Section */}
+        <div className="max-w-2xl mx-auto mt-16 text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">How it works</h2>
           <div className="grid md:grid-cols-3 gap-6">
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Team Drafting</h3>
-              <p className="text-sm text-gray-600">Interactive coin flip and drag-and-drop team selection</p>
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="text-3xl mb-2">👥</div>
+              <h3 className="font-semibold mb-2">Draft Teams</h3>
+              <p className="text-gray-600 text-sm">Pick captains and draft players with our interactive system</p>
             </div>
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Zap className="h-6 w-6 text-purple-600" />
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Live Scoring</h3>
-              <p className="text-sm text-gray-600">Real-time score tracking for team and individual competitions</p>
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="text-3xl mb-2">🏃‍♂️</div>
+              <h3 className="font-semibold mb-2">Compete</h3>
+              <p className="text-gray-600 text-sm">Track scores across team and individual challenges</p>
             </div>
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trophy className="h-6 w-6 text-yellow-600" />
-              </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Competition Dashboard</h3>
-              <p className="text-sm text-gray-600">Beautiful overview of teams, scores, and achievements</p>
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="text-3xl mb-2">🏆</div>
+              <h3 className="font-semibold mb-2">Crown Winners</h3>
+              <p className="text-gray-600 text-sm">Real-time leaderboard and final championship results</p>
             </div>
           </div>
         </div>
