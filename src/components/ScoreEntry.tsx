@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -31,9 +32,12 @@ interface Participant {
   team_id: string;
 }
 
-interface IndividualScore {
-  participant_id: string;
-  score: number;
+interface ScoringRules {
+  teamWin: number;
+  teamLoss: number;
+  firstPlace: number;
+  secondPlace: number;
+  lastPlace: number;
 }
 
 interface TeamSummary {
@@ -41,18 +45,21 @@ interface TeamSummary {
   team_name: string;
   total_score: number;
   participants: { id: string; name: string; score: number }[];
-  bonus_points: number;
+  placement_bonus: number;
+  individual_bonuses: number;
   final_points: number;
 }
 
 const ScoreEntry = ({ 
   activity, 
   competitionId, 
+  competitionCode,
   onClose, 
   onScoresUpdated 
 }: { 
   activity: Activity;
   competitionId: string;
+  competitionCode: string;
   onClose: () => void;
   onScoresUpdated: () => void;
 }) => {
@@ -60,12 +67,29 @@ const ScoreEntry = ({
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [teamScores, setTeamScores] = useState<Record<string, number>>({});
   const [individualScores, setIndividualScores] = useState<Record<string, number>>({});
+  const [selectedWinnerTeam, setSelectedWinnerTeam] = useState<string>('');
+  const [useCustomScores, setUseCustomScores] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [scoringRules, setScoringRules] = useState<ScoringRules>({
+    teamWin: 50,
+    teamLoss: 0,
+    firstPlace: 10,
+    secondPlace: 5,
+    lastPlace: -5
+  });
 
   useEffect(() => {
     loadData();
+    loadScoringRules();
   }, [competitionId, activity]);
+
+  const loadScoringRules = () => {
+    const savedRules = localStorage.getItem(`scoring_${competitionCode}`);
+    if (savedRules) {
+      setScoringRules(JSON.parse(savedRules));
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -78,7 +102,7 @@ const ScoreEntry = ({
       if (teamsError) throw teamsError;
       setTeams(teamsData || []);
 
-      // Load participants
+      // Load participants (including captains)
       const { data: participantsData, error: participantsError } = await supabase
         .from('participants')
         .select('*')
@@ -97,10 +121,14 @@ const ScoreEntry = ({
 
       const existingTeamScores: Record<string, number> = {};
       const existingIndividualScores: Record<string, number> = {};
+      let winnerTeam = '';
       
       scoresData?.forEach(score => {
         if (score.score_type === 'team' && score.team_id) {
           existingTeamScores[score.team_id] = score.value || 0;
+          if (score.points_earned === scoringRules.teamWin) {
+            winnerTeam = score.team_id;
+          }
         } else if (score.score_type === 'individual' && score.participant_id) {
           existingIndividualScores[score.participant_id] = score.individual_score || 0;
         }
@@ -108,6 +136,8 @@ const ScoreEntry = ({
       
       setTeamScores(existingTeamScores);
       setIndividualScores(existingIndividualScores);
+      setSelectedWinnerTeam(winnerTeam);
+      setUseCustomScores(Object.keys(existingTeamScores).length > 0 && !winnerTeam);
 
     } catch (error) {
       console.error('Error loading score entry data:', error);
@@ -149,31 +179,44 @@ const ScoreEntry = ({
         team_name: team.name,
         total_score,
         participants: participantScores,
-        bonus_points: 0,
+        placement_bonus: 0,
+        individual_bonuses: 0,
         final_points: 0
       };
     });
 
-    // Calculate bonuses based on team totals
+    // Calculate team placement bonuses based on team totals
     const sortedByTotal = [...summaries].sort((a, b) => b.total_score - a.total_score);
     
     sortedByTotal.forEach((summary, index) => {
-      if (index === 0) summary.bonus_points = 50; // 1st place
-      else if (index === 1) summary.bonus_points = 25; // 2nd place
-      else if (index === sortedByTotal.length - 1) summary.bonus_points = -10; // Last place
-      else summary.bonus_points = 0;
-      
-      // Calculate individual bonuses within each team
-      const sortedParticipants = [...summary.participants].sort((a, b) => b.score - a.score);
+      if (index === 0) summary.placement_bonus = scoringRules.teamWin; // 1st place team
+      else if (index === 1) summary.placement_bonus = 25; // 2nd place team
+      else if (index === sortedByTotal.length - 1) summary.placement_bonus = -10; // Last place team
+      else summary.placement_bonus = 0;
+    });
+
+    // Calculate individual bonuses within each team
+    const allParticipantScores = summaries.flatMap(s => 
+      s.participants.map(p => ({ ...p, team_id: s.team_id }))
+    ).sort((a, b) => b.score - a.score);
+
+    summaries.forEach(summary => {
       let individualBonuses = 0;
       
-      sortedParticipants.forEach((participant, pIndex) => {
-        if (pIndex === 0 && sortedParticipants.length > 1) individualBonuses += 10; // Team's best performer
-        else if (pIndex === 1 && sortedParticipants.length > 2) individualBonuses += 5; // Team's 2nd best
-        else if (pIndex === sortedParticipants.length - 1 && sortedParticipants.length > 2) individualBonuses -= 5; // Team's worst
+      summary.participants.forEach(participant => {
+        const globalRank = allParticipantScores.findIndex(p => p.id === participant.id);
+        
+        if (globalRank === 0 && allParticipantScores.length > 1) {
+          individualBonuses += scoringRules.firstPlace; // Overall 1st place
+        } else if (globalRank === 1 && allParticipantScores.length > 2) {
+          individualBonuses += scoringRules.secondPlace; // Overall 2nd place
+        } else if (globalRank === allParticipantScores.length - 1 && allParticipantScores.length > 2) {
+          individualBonuses += scoringRules.lastPlace; // Overall last place
+        }
       });
       
-      summary.final_points = summary.bonus_points + individualBonuses;
+      summary.individual_bonuses = individualBonuses;
+      summary.final_points = summary.placement_bonus + summary.individual_bonuses;
     });
 
     return summaries;
@@ -192,19 +235,37 @@ const ScoreEntry = ({
 
       if (activity.type === 'team') {
         // Team competition scoring
-        const sortedTeams = Object.entries(teamScores).sort((a, b) => b[1] - a[1]);
-        
-        for (const [teamId, score] of sortedTeams) {
-          const points = sortedTeams.findIndex(([id]) => id === teamId) === 0 ? 50 : 0;
-          scoreInserts.push({
-            activity_id: activity.id,
-            team_id: teamId,
-            participant_id: null,
-            value: score,
-            individual_score: null,
-            score_type: 'team',
-            points_earned: points
-          });
+        if (useCustomScores) {
+          // Custom scoring mode
+          for (const [teamId, score] of Object.entries(teamScores)) {
+            if (score > 0) {
+              scoreInserts.push({
+                activity_id: activity.id,
+                team_id: teamId,
+                participant_id: null,
+                value: score,
+                individual_score: null,
+                score_type: 'team',
+                points_earned: score
+              });
+            }
+          }
+        } else {
+          // Win/lose mode
+          if (selectedWinnerTeam) {
+            teams.forEach(team => {
+              const isWinner = team.id === selectedWinnerTeam;
+              scoreInserts.push({
+                activity_id: activity.id,
+                team_id: team.id,
+                participant_id: null,
+                value: isWinner ? 1 : 0,
+                individual_score: null,
+                score_type: 'team',
+                points_earned: isWinner ? scoringRules.teamWin : scoringRules.teamLoss
+              });
+            });
+          }
         }
       } else {
         // Individual competition scoring
@@ -260,19 +321,25 @@ const ScoreEntry = ({
       const teamUpdates: Record<string, number> = {};
       
       if (activity.type === 'team') {
-        const sortedTeams = Object.entries(teamScores).sort((a, b) => b[1] - a[1]);
-        const winnerTeamId = sortedTeams[0]?.[0];
-        if (winnerTeamId) teamUpdates[winnerTeamId] = 50;
+        if (useCustomScores) {
+          Object.entries(teamScores).forEach(([teamId, score]) => {
+            if (score > 0) teamUpdates[teamId] = score;
+          });
+        } else if (selectedWinnerTeam) {
+          teamUpdates[selectedWinnerTeam] = scoringRules.teamWin;
+        }
       } else {
         const teamSummaries = calculateTeamSummaries();
         teamSummaries.forEach(summary => {
-          teamUpdates[summary.team_id] = summary.final_points;
+          if (summary.final_points !== 0) {
+            teamUpdates[summary.team_id] = summary.final_points;
+          }
         });
       }
 
       for (const [teamId, additionalPoints] of Object.entries(teamUpdates)) {
         const currentTeam = teams.find(t => t.id === teamId);
-        if (currentTeam && additionalPoints !== 0) {
+        if (currentTeam) {
           await supabase
             .from('teams')
             .update({ total_score: currentTeam.total_score + additionalPoints })
@@ -335,17 +402,53 @@ const ScoreEntry = ({
           {activity.type === 'team' ? (
             // Team scoring
             <div className="space-y-4">
-              {teams.map(team => (
-                <div key={team.id} className="flex items-center space-x-4">
-                  <Label className="w-32 font-medium">{team.name}</Label>
-                  <Input
-                    type="number"
-                    placeholder={`Enter ${activity.unit || 'score'}`}
-                    value={teamScores[team.id] || ''}
-                    onChange={(e) => updateTeamScore(team.id, e.target.value)}
-                  />
+              <div className="flex items-center space-x-2">
+                <Switch 
+                  id="custom-scores" 
+                  checked={useCustomScores}
+                  onCheckedChange={setUseCustomScores}
+                />
+                <Label htmlFor="custom-scores">Use custom scores instead of win/lose</Label>
+              </div>
+
+              {useCustomScores ? (
+                // Custom scoring mode
+                <div className="space-y-4">
+                  {teams.map(team => (
+                    <div key={team.id} className="flex items-center space-x-4">
+                      <Label className="w-32 font-medium">{team.name}</Label>
+                      <Input
+                        type="number"
+                        placeholder={`Enter ${activity.unit || 'score'}`}
+                        value={teamScores[team.id] || ''}
+                        onChange={(e) => updateTeamScore(team.id, e.target.value)}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                // Win/lose mode
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Select the winning team (Winner gets +{scoringRules.teamWin} points)
+                  </p>
+                  <div className="grid gap-3">
+                    {teams.map(team => (
+                      <Button
+                        key={team.id}
+                        variant={selectedWinnerTeam === team.id ? "default" : "outline"}
+                        onClick={() => setSelectedWinnerTeam(team.id)}
+                        className="justify-start"
+                      >
+                        {team.name}
+                        {selectedWinnerTeam === team.id && (
+                          <Badge className="ml-2">Winner</Badge>
+                        )}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             // Individual scoring
@@ -400,8 +503,15 @@ const ScoreEntry = ({
                             <div className="space-y-2 text-sm">
                               <div className="flex justify-between">
                                 <span>Team Placement Bonus:</span>
-                                <span className={summary.bonus_points > 0 ? 'text-green-600 font-medium' : summary.bonus_points < 0 ? 'text-red-600 font-medium' : ''}>
-                                  {summary.bonus_points > 0 ? '+' : ''}{summary.bonus_points} pts
+                                <span className={summary.placement_bonus > 0 ? 'text-green-600 font-medium' : summary.placement_bonus < 0 ? 'text-red-600 font-medium' : ''}>
+                                  {summary.placement_bonus > 0 ? '+' : ''}{summary.placement_bonus} pts
+                                </span>
+                              </div>
+                              
+                              <div className="flex justify-between">
+                                <span>Individual Performance Bonus:</span>
+                                <span className={summary.individual_bonuses > 0 ? 'text-green-600 font-medium' : summary.individual_bonuses < 0 ? 'text-red-600 font-medium' : ''}>
+                                  {summary.individual_bonuses > 0 ? '+' : ''}{summary.individual_bonuses} pts
                                 </span>
                               </div>
                               

@@ -305,6 +305,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
         <ScoreEntry
           activity={selectedActivity}
           competitionId={competitionId}
+          competitionCode={competitionCode}
           onClose={() => setSelectedActivity(null)}
           onScoresUpdated={loadActivities}
         />
