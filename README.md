@@ -1,73 +1,163 @@
-# Welcome to your Lovable project
+# 🏆 Boast - Team Competition Management App
 
-## Project info
+**The ultimate app for organizing epic friend group competitions like "Dawg Olympics"**
 
-**URL**: https://lovable.dev/projects/f8c4133f-4bf5-4e93-b320-fe0800ca07bf
+Boast helps groups of friends organize team-based competitions where participants are drafted into teams, compete in various activities, and track scores with complete transparency. Perfect for events like olympics-style competitions, game nights, sports tournaments, or any competitive gathering.
 
-## How can I edit this code?
+## 🎯 What Does Boast Do?
 
-There are several ways of editing your application.
+### Core Concept
+Split your friend group into teams, draft players, compete in activities, and track comprehensive scores with real-time leaderboards and transparent point allocation.
 
-**Use Lovable**
+### 🌟 Key Features
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/f8c4133f-4bf5-4e93-b320-fe0800ca07bf) and start prompting.
+#### 1. **Competition Management**
+- Create competitions with unique 6-character codes
+- Join existing competitions using codes
+- No authentication required - purely code-based access
+- Perfect for spontaneous events and gatherings
 
-Changes made via Lovable will be committed automatically to this repo.
+#### 2. **Smart Team Drafting System**
+- Add participants to a draft pool
+- Designate team captains (automatically creates teams)
+- **Coin flip mechanism** for determining draft order
+- Drag-and-drop player assignment interface
+- Real-time draft status tracking
+- Support for 2 teams per competition
 
-**Use your preferred IDE**
+#### 3. **Flexible Activity System**
+- **Team-based activities**: Competitions where teams compete as units (e.g., Beer Pong, Flag Football)
+- **Individual activities**: Personal performance that contributes to team totals (e.g., Push-ups, Sprint times)
+- Preset activity templates for common competitions
+- Custom activity creation with configurable units
+- Activity completion tracking
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+#### 4. **Advanced Scoring System**
+- **Configurable scoring rules**:
+  - Team win/loss points (default: 50/0)
+  - Individual placement bonuses (1st: +10, 2nd: +5, Last: -5)
+- Support for negative points (penalties)
+- **Two scoring modes**:
+  - **Win/Loss mode**: Simple winner selection
+  - **Custom scoring**: Direct point entry for complex scoring
+- Automatic calculation of team totals
+- Individual score tracking with team aggregation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+#### 5. **Transparent Point Tracking**
+- **Activity-level transparency**: See exactly how many points each team gained/lost per activity
+- Color-coded badges showing net point changes (green for gains, red for losses)
+- Complete audit trail of all scoring decisions
+- Real-time leaderboard updates
 
-Follow these steps:
+#### 6. **Interactive Individual Leaderboards**
+- **Visual podium** showing top 3 individual performers
+- Gold/silver/bronze podium with hover animations
+- Complete individual rankings for all participants
+- Team attribution for each participant
+- Real-time updates as scores are entered
 
+#### 7. **Comprehensive Dashboard**
+- Live team leaderboard with current standings
+- Activity completion status overview
+- Participant statistics and team composition
+- Competition overview metrics
+- Real-time score updates across all devices
+
+## 🛠️ Development Journey
+
+This project was **initially prototyped using Lovable** for rapid iteration and feature exploration, then **brought into Cursor for advanced development** and fine-tuning. This hybrid approach allowed for:
+
+- **Rapid prototyping** with Lovable's AI-assisted development
+- **Detailed customization** and advanced features in Cursor
+- **Best of both worlds**: Speed + precision
+
+## 🏗️ Tech Stack
+
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI Library**: shadcn/ui components with Radix UI primitives
+- **Styling**: Tailwind CSS with custom theming
+- **Database**: Supabase (PostgreSQL with real-time features)
+- **State Management**: React Query (@tanstack/react-query) for server state
+- **Routing**: React Router DOM
+- **Icons**: Lucide React
+- **Notifications**: Sonner toasts
+
+## 📊 Database Schema
+
+### Core Tables
+- **competitions**: Main competition instances with unique codes
+- **teams**: Team data (2 teams per competition) with captains and scores
+- **participants**: Individual players assigned to teams
+- **activities**: Competition events (team-based or individual scoring)
+- **scores**: Results tracking with support for both team and individual scores
+
+### Key Relationships
+- Competition → Teams (1:many)
+- Teams → Participants (1:many)
+- Competition → Activities (1:many)
+- Activities → Scores (1:many)
+- Scores can link to either Teams or Participants
+
+## 🎮 How to Use
+
+1. **Create a Competition**: Set up a new competition with a unique code
+2. **Add Participants**: Build your draft pool with all players
+3. **Draft Teams**: Designate captains and use the coin flip + draft system
+4. **Set Up Activities**: Add team or individual activities for your event
+5. **Configure Scoring**: Set up scoring rules and bonuses
+6. **Compete & Score**: Enter results as activities are completed
+7. **Track Progress**: Monitor live leaderboards and transparent scoring
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+### Setup
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Clone the repository
+git clone https://github.com/mushfiqur124/boast.git
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Navigate to project directory
+cd boast
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Setup
+- Supabase project: `qqmtgxwbnxflbttbbbba`
+- All environment variables are configured
+- Database migrations are in `supabase/migrations/`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🎨 Design Philosophy
 
-**Use GitHub Codespaces**
+- **KISS Principle**: Keep It Simple, Stupid - always choose the simplest solution that works
+- **Real-time transparency**: Complete visibility into scoring and point allocation
+- **Mobile-first**: Responsive design for on-the-go competition management
+- **No authentication**: Code-based access for frictionless event participation
+- **Engaging UX**: Fun animations and visual elements while maintaining clean design
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🔮 Future Enhancements
 
-## What technologies are used for this project?
+- Export to CSV functionality
+- Photo uploads for activities
+- Advanced analytics and statistics
+- Custom competition templates
+- Multi-round tournament support
+- Integration with social platforms
 
-This project is built with:
+## 🤝 Contributing
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+This project follows the KISS principle - prefer simple, readable code over complex abstractions. When making changes, consider downstream effects and related impacts.
 
-## How can I deploy this project?
+## 📝 License
 
-Simply open [Lovable](https://lovable.dev/projects/f8c4133f-4bf5-4e93-b320-fe0800ca07bf) and click on Share -> Publish.
+This project is open source and available under the MIT License.
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+**Ready to turn your next friend gathering into an epic competition? Let's Boast about it! 🏆**
