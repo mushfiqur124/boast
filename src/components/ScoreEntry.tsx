@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface Activity {
   id: string;
   name: string;
-  type: 'team' | 'individual';
+  type: string;
   unit?: string;
   completed: boolean;
 }
@@ -29,10 +31,18 @@ interface Participant {
   team_id: string;
 }
 
-interface Score {
-  participant_id?: string;
-  team_id?: string;
-  value?: number;
+interface IndividualScore {
+  participant_id: string;
+  score: number;
+}
+
+interface TeamSummary {
+  team_id: string;
+  team_name: string;
+  total_score: number;
+  participants: { id: string; name: string; score: number }[];
+  bonus_points: number;
+  final_points: number;
 }
 
 const ScoreEntry = ({ 
@@ -48,7 +58,8 @@ const ScoreEntry = ({
 }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [scores, setScores] = useState<Record<string, number>>({});
+  const [teamScores, setTeamScores] = useState<Record<string, number>>({});
+  const [individualScores, setIndividualScores] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -67,16 +78,14 @@ const ScoreEntry = ({
       if (teamsError) throw teamsError;
       setTeams(teamsData || []);
 
-      // Load participants if individual activity
-      if (activity.type === 'individual') {
-        const { data: participantsData, error: participantsError } = await supabase
-          .from('participants')
-          .select('*')
-          .in('team_id', (teamsData || []).map(t => t.id));
+      // Load participants
+      const { data: participantsData, error: participantsError } = await supabase
+        .from('participants')
+        .select('*')
+        .in('team_id', (teamsData || []).map(t => t.id));
 
-        if (participantsError) throw participantsError;
-        setParticipants(participantsData || []);
-      }
+      if (participantsError) throw participantsError;
+      setParticipants(participantsData || []);
 
       // Load existing scores
       const { data: scoresData, error: scoresError } = await supabase
@@ -86,14 +95,19 @@ const ScoreEntry = ({
 
       if (scoresError) throw scoresError;
 
-      const existingScores: Record<string, number> = {};
+      const existingTeamScores: Record<string, number> = {};
+      const existingIndividualScores: Record<string, number> = {};
+      
       scoresData?.forEach(score => {
-        const key = activity.type === 'team' 
-          ? `team_${score.team_id}`
-          : `participant_${score.participant_id}`;
-        existingScores[key] = score.value || 0;
+        if (score.score_type === 'team' && score.team_id) {
+          existingTeamScores[score.team_id] = score.value || 0;
+        } else if (score.score_type === 'individual' && score.participant_id) {
+          existingIndividualScores[score.participant_id] = score.individual_score || 0;
+        }
       });
-      setScores(existingScores);
+      
+      setTeamScores(existingTeamScores);
+      setIndividualScores(existingIndividualScores);
 
     } catch (error) {
       console.error('Error loading score entry data:', error);
@@ -107,69 +121,134 @@ const ScoreEntry = ({
     }
   };
 
-  const updateScore = (key: string, value: string) => {
+  const updateTeamScore = (teamId: string, value: string) => {
     const numValue = parseFloat(value) || 0;
-    setScores(prev => ({ ...prev, [key]: numValue }));
+    setTeamScores(prev => ({ ...prev, [teamId]: numValue }));
   };
 
-  const calculatePoints = (scores: Record<string, number>, isTeamActivity: boolean) => {
-    const entries = Object.entries(scores);
-    if (entries.length === 0) return {};
+  const updateIndividualScore = (participantId: string, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setIndividualScores(prev => ({ ...prev, [participantId]: numValue }));
+  };
 
-    const points: Record<string, number> = {};
+  const calculateTeamSummaries = (): TeamSummary[] => {
+    if (activity.type !== 'individual') return [];
 
-    if (isTeamActivity) {
-      // For team activities, winner gets 50 points, loser gets 0
-      const sortedEntries = entries.sort((a, b) => b[1] - a[1]);
-      sortedEntries.forEach((entry, index) => {
-        points[entry[0]] = index === 0 ? 50 : 0;
+    const summaries: TeamSummary[] = teams.map(team => {
+      const teamParticipants = participants.filter(p => p.team_id === team.id);
+      const participantScores = teamParticipants.map(p => ({
+        id: p.id,
+        name: p.name,
+        score: individualScores[p.id] || 0
+      }));
+      
+      const total_score = participantScores.reduce((sum, p) => sum + p.score, 0);
+      
+      return {
+        team_id: team.id,
+        team_name: team.name,
+        total_score,
+        participants: participantScores,
+        bonus_points: 0,
+        final_points: 0
+      };
+    });
+
+    // Calculate bonuses based on team totals
+    const sortedByTotal = [...summaries].sort((a, b) => b.total_score - a.total_score);
+    
+    sortedByTotal.forEach((summary, index) => {
+      if (index === 0) summary.bonus_points = 50; // 1st place
+      else if (index === 1) summary.bonus_points = 25; // 2nd place
+      else if (index === sortedByTotal.length - 1) summary.bonus_points = -10; // Last place
+      else summary.bonus_points = 0;
+      
+      // Calculate individual bonuses within each team
+      const sortedParticipants = [...summary.participants].sort((a, b) => b.score - a.score);
+      let individualBonuses = 0;
+      
+      sortedParticipants.forEach((participant, pIndex) => {
+        if (pIndex === 0 && sortedParticipants.length > 1) individualBonuses += 10; // Team's best performer
+        else if (pIndex === 1 && sortedParticipants.length > 2) individualBonuses += 5; // Team's 2nd best
+        else if (pIndex === sortedParticipants.length - 1 && sortedParticipants.length > 2) individualBonuses -= 5; // Team's worst
       });
-    } else {
-      // For individual activities, calculate bonuses
-      const sortedEntries = entries.sort((a, b) => b[1] - a[1]);
-      sortedEntries.forEach((entry, index) => {
-        if (index === 0) points[entry[0]] = 10; // 1st place bonus
-        else if (index === 1) points[entry[0]] = 5; // 2nd place bonus
-        else if (index === sortedEntries.length - 1) points[entry[0]] = -5; // Last place penalty
-        else points[entry[0]] = 0;
-      });
-    }
+      
+      summary.final_points = summary.bonus_points + individualBonuses;
+    });
 
-    return points;
+    return summaries;
   };
 
   const saveScores = async () => {
     setSaving(true);
     try {
-      const points = calculatePoints(scores, activity.type === 'team');
-
-      // Delete existing scores
+      // Delete existing scores for this activity
       await supabase
         .from('scores')
         .delete()
         .eq('activity_id', activity.id);
 
-      // Insert new scores
-      const scoreInserts = Object.entries(scores).map(([key, value]) => {
-        const isTeam = key.startsWith('team_');
-        const id = key.split('_')[1];
+      const scoreInserts = [];
+
+      if (activity.type === 'team') {
+        // Team competition scoring
+        const sortedTeams = Object.entries(teamScores).sort((a, b) => b[1] - a[1]);
         
-        return {
-          activity_id: activity.id,
-          team_id: isTeam ? id : participants.find(p => p.id === id)?.team_id,
-          participant_id: isTeam ? null : id,
-          value: value,
-          points_earned: points[key] || 0
-        };
-      });
+        for (const [teamId, score] of sortedTeams) {
+          const points = sortedTeams.findIndex(([id]) => id === teamId) === 0 ? 50 : 0;
+          scoreInserts.push({
+            activity_id: activity.id,
+            team_id: teamId,
+            participant_id: null,
+            value: score,
+            individual_score: null,
+            score_type: 'team',
+            points_earned: points
+          });
+        }
+      } else {
+        // Individual competition scoring
+        const teamSummaries = calculateTeamSummaries();
+        
+        // Insert individual scores
+        for (const [participantId, score] of Object.entries(individualScores)) {
+          if (score > 0) {
+            const participant = participants.find(p => p.id === participantId);
+            scoreInserts.push({
+              activity_id: activity.id,
+              team_id: participant?.team_id || null,
+              participant_id: participantId,
+              value: null,
+              individual_score: score,
+              score_type: 'individual',
+              points_earned: 0
+            });
+          }
+        }
+        
+        // Insert team totals with points
+        for (const summary of teamSummaries) {
+          scoreInserts.push({
+            activity_id: activity.id,
+            team_id: summary.team_id,
+            participant_id: null,
+            value: summary.total_score,
+            individual_score: null,
+            score_type: 'team',
+            points_earned: summary.final_points
+          });
+        }
+      }
 
-      const { error: scoresError } = await supabase
-        .from('scores')
-        .insert(scoreInserts);
+      if (scoreInserts.length > 0) {
+        const { error: scoresError } = await supabase
+          .from('scores')
+          .insert(scoreInserts);
 
-      if (scoresError) throw scoresError;
+        if (scoresError) throw scoresError;
+      }
 
-      // Update activity as completed
+      // Mark activity as completed
       const { error: activityError } = await supabase
         .from('activities')
         .update({ completed: true })
@@ -178,23 +257,22 @@ const ScoreEntry = ({
       if (activityError) throw activityError;
 
       // Update team total scores
-      const teamScoreUpdates: Record<string, number> = {};
-      Object.entries(points).forEach(([key, pointsEarned]) => {
-        if (key.startsWith('team_')) {
-          const teamId = key.split('_')[1];
-          teamScoreUpdates[teamId] = (teamScoreUpdates[teamId] || 0) + pointsEarned;
-        } else {
-          const participantId = key.split('_')[1];
-          const participant = participants.find(p => p.id === participantId);
-          if (participant) {
-            teamScoreUpdates[participant.team_id] = (teamScoreUpdates[participant.team_id] || 0) + pointsEarned;
-          }
-        }
-      });
+      const teamUpdates: Record<string, number> = {};
+      
+      if (activity.type === 'team') {
+        const sortedTeams = Object.entries(teamScores).sort((a, b) => b[1] - a[1]);
+        const winnerTeamId = sortedTeams[0]?.[0];
+        if (winnerTeamId) teamUpdates[winnerTeamId] = 50;
+      } else {
+        const teamSummaries = calculateTeamSummaries();
+        teamSummaries.forEach(summary => {
+          teamUpdates[summary.team_id] = summary.final_points;
+        });
+      }
 
-      for (const [teamId, additionalPoints] of Object.entries(teamScoreUpdates)) {
+      for (const [teamId, additionalPoints] of Object.entries(teamUpdates)) {
         const currentTeam = teams.find(t => t.id === teamId);
-        if (currentTeam) {
+        if (currentTeam && additionalPoints !== 0) {
           await supabase
             .from('teams')
             .update({ total_score: currentTeam.total_score + additionalPoints })
@@ -234,9 +312,11 @@ const ScoreEntry = ({
     );
   }
 
+  const teamSummaries = activity.type === 'individual' ? calculateTeamSummaries() : [];
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enter Scores: {activity.name}</DialogTitle>
           <DialogDescription>
@@ -251,39 +331,96 @@ const ScoreEntry = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 max-h-96 overflow-y-auto">
+        <div className="space-y-6">
           {activity.type === 'team' ? (
             // Team scoring
-            teams.map(team => (
-              <div key={team.id} className="flex items-center space-x-4">
-                <Label className="w-32 font-medium">{team.name}</Label>
-                <Input
-                  type="number"
-                  placeholder={`Enter ${activity.unit || 'score'}`}
-                  value={scores[`team_${team.id}`] || ''}
-                  onChange={(e) => updateScore(`team_${team.id}`, e.target.value)}
-                />
-              </div>
-            ))
-          ) : (
-            // Individual scoring
-            participants.map(participant => {
-              const team = teams.find(t => t.id === participant.team_id);
-              return (
-                <div key={participant.id} className="flex items-center space-x-4">
-                  <div className="w-32">
-                    <p className="font-medium">{participant.name}</p>
-                    <p className="text-xs text-gray-500">{team?.name}</p>
-                  </div>
+            <div className="space-y-4">
+              {teams.map(team => (
+                <div key={team.id} className="flex items-center space-x-4">
+                  <Label className="w-32 font-medium">{team.name}</Label>
                   <Input
                     type="number"
                     placeholder={`Enter ${activity.unit || 'score'}`}
-                    value={scores[`participant_${participant.id}`] || ''}
-                    onChange={(e) => updateScore(`participant_${participant.id}`, e.target.value)}
+                    value={teamScores[team.id] || ''}
+                    onChange={(e) => updateTeamScore(team.id, e.target.value)}
                   />
                 </div>
-              );
-            })
+              ))}
+            </div>
+          ) : (
+            // Individual scoring
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg">Individual Scores</h3>
+                {teams.map(team => {
+                  const teamParticipants = participants.filter(p => p.team_id === team.id);
+                  return (
+                    <Card key={team.id}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">{team.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {teamParticipants.map(participant => (
+                          <div key={participant.id} className="flex items-center space-x-3">
+                            <Label className="w-24 text-sm">{participant.name}</Label>
+                            <Input
+                              type="number"
+                              placeholder={activity.unit || 'score'}
+                              value={individualScores[participant.id] || ''}
+                              onChange={(e) => updateIndividualScore(participant.id, e.target.value)}
+                              className="flex-1"
+                            />
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg">Team Summaries & Points</h3>
+                {teamSummaries.length > 0 && (
+                  <div className="space-y-3">
+                    {teamSummaries
+                      .sort((a, b) => b.total_score - a.total_score)
+                      .map((summary, index) => (
+                        <Card key={summary.team_id} className="border-2">
+                          <CardContent className="pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-semibold">#{index + 1}</span>
+                                <span className="font-medium">{summary.team_name}</span>
+                              </div>
+                              <Badge variant="outline" className="font-mono">
+                                Total: {summary.total_score} {activity.unit}
+                              </Badge>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span>Team Placement Bonus:</span>
+                                <span className={summary.bonus_points > 0 ? 'text-green-600 font-medium' : summary.bonus_points < 0 ? 'text-red-600 font-medium' : ''}>
+                                  {summary.bonus_points > 0 ? '+' : ''}{summary.bonus_points} pts
+                                </span>
+                              </div>
+                              
+                              <Separator />
+                              
+                              <div className="flex justify-between font-medium">
+                                <span>Final Points Earned:</span>
+                                <span className={summary.final_points > 0 ? 'text-green-600' : summary.final_points < 0 ? 'text-red-600' : ''}>
+                                  {summary.final_points > 0 ? '+' : ''}{summary.final_points} pts
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

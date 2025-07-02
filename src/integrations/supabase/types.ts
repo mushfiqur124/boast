@@ -102,8 +102,10 @@ export type Database = {
           activity_id: string
           created_at: string
           id: string
+          individual_score: number | null
           participant_id: string | null
           points_earned: number
+          score_type: string
           team_id: string | null
           value: number | null
         }
@@ -111,8 +113,10 @@ export type Database = {
           activity_id: string
           created_at?: string
           id?: string
+          individual_score?: number | null
           participant_id?: string | null
           points_earned?: number
+          score_type?: string
           team_id?: string | null
           value?: number | null
         }
@@ -120,8 +124,10 @@ export type Database = {
           activity_id?: string
           created_at?: string
           id?: string
+          individual_score?: number | null
           participant_id?: string | null
           points_earned?: number
+          score_type?: string
           team_id?: string | null
           value?: number | null
         }

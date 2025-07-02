@@ -15,7 +15,7 @@ import ScoreEntry from './ScoreEntry';
 interface Activity {
   id: string;
   name: string;
-  type: 'team' | 'individual';
+  type: string;
   unit?: string;
   completed: boolean;
 }
@@ -24,7 +24,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
   const [activities, setActivities] = useState<Activity[]>([]);
   const [newActivity, setNewActivity] = useState({
     name: '',
-    type: 'team' as 'team' | 'individual',
+    type: 'team' as string,
     unit: ''
   });
   const [isAddingActivity, setIsAddingActivity] = useState(false);
@@ -179,7 +179,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
                 <Label htmlFor="activity-type">Activity Type</Label>
                 <Select 
                   value={newActivity.type} 
-                  onValueChange={(value: 'team' | 'individual') => 
+                  onValueChange={(value: string) => 
                     setNewActivity({ ...newActivity, type: value })
                   }
                 >
