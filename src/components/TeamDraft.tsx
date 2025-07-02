@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,11 +125,23 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
 
       if (error) throw error;
 
+      // Add the captain as a participant in the team
+      const { error: participantError } = await supabase
+        .from('participants')
+        .insert([
+          {
+            team_id: teamData.id,
+            name: participant.name
+          }
+        ]);
+
+      if (participantError) throw participantError;
+
       const newTeam: Team = {
         id: teamData.id,
         name: teamData.name,
         captain: teamData.captain,
-        participants: []
+        participants: [{ id: 'captain', name: participant.name, team_id: teamData.id }]
       };
 
       const updatedTeams = [...teams, newTeam];
@@ -314,12 +325,14 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
                   </h3>
                   <p className="text-sm text-gray-600 mb-2">Captain: {team.captain}</p>
                   <div className="space-y-1">
-                    {team.participants.map(member => (
-                      <Badge key={member.id} variant="secondary">{member.name}</Badge>
-                    ))}
+                    {team.participants
+                      .filter(member => member.name !== team.captain) // Don't show captain twice
+                      .map(member => (
+                        <Badge key={member.id} variant="secondary">{member.name}</Badge>
+                      ))}
                   </div>
                   <p className="text-sm text-gray-500 mt-2">
-                    Total: {team.participants.length + 1} players
+                    Total: {team.participants.length} players
                   </p>
                 </div>
               ))}
@@ -345,53 +358,55 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
       )}
 
       <div className="grid lg:grid-cols-4 gap-6">
-        {/* Left Sidebar - Participants */}
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Participants</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex space-x-2">
-                <Input
-                  placeholder="Add participant"
-                  value={newParticipantName}
-                  onChange={(e) => setNewParticipantName(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && addParticipant()}
-                />
-                <Button onClick={addParticipant} size="sm">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="space-y-2">
-                {participants.map(participant => (
-                  <div 
-                    key={participant.id}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      draftActive 
-                        ? 'hover:bg-blue-50 border-blue-200' 
-                        : 'hover:bg-gray-50'
-                    }`}
-                    onClick={() => {
-                      if (!draftActive && teams.length < 2) {
-                        makeCaptain(participant.id);
-                      }
-                    }}
-                  >
-                    <p className="font-medium">{participant.name}</p>
-                    {!draftActive && teams.length < 2 && (
-                      <p className="text-xs text-gray-500">Click to make captain</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Left Sidebar - Participants (only show if draft not complete) */}
+        {!draftComplete && (
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle>Participants</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Add participant"
+                    value={newParticipantName}
+                    onChange={(e) => setNewParticipantName(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && addParticipant()}
+                  />
+                  <Button onClick={addParticipant} size="sm">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  {participants.map(participant => (
+                    <div 
+                      key={participant.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        draftActive 
+                          ? 'hover:bg-blue-50 border-blue-200' 
+                          : 'hover:bg-gray-50'
+                      }`}
+                      onClick={() => {
+                        if (!draftActive && teams.length < 2) {
+                          makeCaptain(participant.id);
+                        }
+                      }}
+                    >
+                      <p className="font-medium">{participant.name}</p>
+                      {!draftActive && teams.length < 2 && (
+                        <p className="text-xs text-gray-500">Click to make captain</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Main Area - Teams */}
-        <div className="lg:col-span-3">
+        <div className={draftComplete ? "lg:col-span-4" : "lg:col-span-3"}>
           <div className="grid md:grid-cols-2 gap-6">
             {teams.map(team => (
               <Card 
@@ -411,9 +426,11 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
                 <CardContent>
                   <div className="space-y-2">
                     <Badge variant="outline">Captain: {team.captain}</Badge>
-                    {team.participants.map(member => (
-                      <Badge key={member.id} variant="secondary">{member.name}</Badge>
-                    ))}
+                    {team.participants
+                      .filter(member => member.name !== team.captain) // Don't show captain twice
+                      .map(member => (
+                        <Badge key={member.id} variant="secondary">{member.name}</Badge>
+                      ))}
                   </div>
                   
                   {draftActive && currentPick === team.id && participants.length > 0 && (

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +17,7 @@ interface Activity {
   type: string;
   unit?: string;
   completed: boolean;
+  winner?: string;
 }
 
 const Activities = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
@@ -278,6 +278,11 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
                         {activity.completed && (
                           <Badge variant="default" className="bg-green-500">
                             Completed
+                          </Badge>
+                        )}
+                        {activity.completed && activity.winner && (
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                            Winner: {activity.winner}
                           </Badge>
                         )}
                       </div>

@@ -17,6 +17,7 @@ interface Activity {
   name: string;
   type: string;
   completed: boolean;
+  winner?: string;
 }
 
 interface Participant {
@@ -56,7 +57,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
       if (activitiesError) throw activitiesError;
       setActivities(activitiesData || []);
 
-      // Load participants
+      // Load participants (get unique count, not duplicating captains)
       if (teamsData && teamsData.length > 0) {
         const { data: participantsData, error: participantsError } = await supabase
           .from('participants')
@@ -188,9 +189,16 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
                     )}
                     <span className="font-medium">{activity.name}</span>
                   </div>
-                  <Badge variant={activity.completed ? 'default' : 'secondary'}>
-                    {activity.completed ? 'Completed' : 'Pending'}
-                  </Badge>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={activity.completed ? 'default' : 'secondary'}>
+                      {activity.completed ? 'Completed' : 'Pending'}
+                    </Badge>
+                    {activity.completed && activity.winner && (
+                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                        Winner: {activity.winner}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               ))
             )}

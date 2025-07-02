@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -46,7 +45,8 @@ interface TeamSummary {
   total_score: number;
   participants: { id: string; name: string; score: number }[];
   placement_bonus: number;
-  individual_bonuses: number;
+  individual_bonuses: { participant: string; bonus: number; reason: string }[];
+  total_individual_bonuses: number;
   final_points: number;
 }
 
@@ -180,7 +180,8 @@ const ScoreEntry = ({
         total_score,
         participants: participantScores,
         placement_bonus: 0,
-        individual_bonuses: 0,
+        individual_bonuses: [],
+        total_individual_bonuses: 0,
         final_points: 0
       };
     });
@@ -189,34 +190,50 @@ const ScoreEntry = ({
     const sortedByTotal = [...summaries].sort((a, b) => b.total_score - a.total_score);
     
     sortedByTotal.forEach((summary, index) => {
-      if (index === 0) summary.placement_bonus = scoringRules.teamWin; // 1st place team
-      else if (index === 1) summary.placement_bonus = 25; // 2nd place team
-      else if (index === sortedByTotal.length - 1) summary.placement_bonus = -10; // Last place team
-      else summary.placement_bonus = 0;
+      if (index === 0 && sortedByTotal.length > 1) {
+        summary.placement_bonus = scoringRules.teamWin; // 1st place team
+      } else if (index === sortedByTotal.length - 1 && sortedByTotal.length > 1) {
+        summary.placement_bonus = scoringRules.teamLoss; // Last place team
+      } else {
+        summary.placement_bonus = 0;
+      }
     });
 
     // Calculate individual bonuses within each team
     const allParticipantScores = summaries.flatMap(s => 
-      s.participants.map(p => ({ ...p, team_id: s.team_id }))
+      s.participants.map(p => ({ ...p, team_id: s.team_id, team_name: s.team_name }))
     ).sort((a, b) => b.score - a.score);
 
     summaries.forEach(summary => {
-      let individualBonuses = 0;
+      const individualBonuses: { participant: string; bonus: number; reason: string }[] = [];
       
       summary.participants.forEach(participant => {
         const globalRank = allParticipantScores.findIndex(p => p.id === participant.id);
         
         if (globalRank === 0 && allParticipantScores.length > 1) {
-          individualBonuses += scoringRules.firstPlace; // Overall 1st place
+          individualBonuses.push({
+            participant: participant.name,
+            bonus: scoringRules.firstPlace,
+            reason: "1st Place Overall"
+          });
         } else if (globalRank === 1 && allParticipantScores.length > 2) {
-          individualBonuses += scoringRules.secondPlace; // Overall 2nd place
+          individualBonuses.push({
+            participant: participant.name,
+            bonus: scoringRules.secondPlace,
+            reason: "2nd Place Overall"
+          });
         } else if (globalRank === allParticipantScores.length - 1 && allParticipantScores.length > 2) {
-          individualBonuses += scoringRules.lastPlace; // Overall last place
+          individualBonuses.push({
+            participant: participant.name,
+            bonus: scoringRules.lastPlace,
+            reason: "Last Place Overall"
+          });
         }
       });
       
       summary.individual_bonuses = individualBonuses;
-      summary.final_points = summary.placement_bonus + summary.individual_bonuses;
+      summary.total_individual_bonuses = individualBonuses.reduce((sum, bonus) => sum + bonus.bonus, 0);
+      summary.final_points = summary.placement_bonus + summary.total_individual_bonuses;
     });
 
     return summaries;
@@ -309,10 +326,27 @@ const ScoreEntry = ({
         if (scoresError) throw scoresError;
       }
 
-      // Mark activity as completed
+      // Mark activity as completed and store winner
+      let winner = '';
+      if (activity.type === 'team') {
+        if (selectedWinnerTeam) {
+          const winningTeam = teams.find(t => t.id === selectedWinnerTeam);
+          winner = winningTeam?.name || '';
+        }
+      } else {
+        const teamSummaries = calculateTeamSummaries();
+        const sortedSummaries = teamSummaries.sort((a, b) => b.total_score - a.total_score);
+        if (sortedSummaries.length > 0) {
+          winner = sortedSummaries[0].team_name;
+        }
+      }
+
       const { error: activityError } = await supabase
         .from('activities')
-        .update({ completed: true })
+        .update({ 
+          completed: true,
+          winner: winner
+        })
         .eq('id', activity.id);
 
       if (activityError) throw activityError;
@@ -327,6 +361,12 @@ const ScoreEntry = ({
           });
         } else if (selectedWinnerTeam) {
           teamUpdates[selectedWinnerTeam] = scoringRules.teamWin;
+          // Add losing team score if it's not zero
+          teams.forEach(team => {
+            if (team.id !== selectedWinnerTeam && scoringRules.teamLoss !== 0) {
+              teamUpdates[team.id] = scoringRules.teamLoss;
+            }
+          });
         }
       } else {
         const teamSummaries = calculateTeamSummaries();
@@ -430,7 +470,7 @@ const ScoreEntry = ({
                 // Win/lose mode
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600">
-                    Select the winning team (Winner gets +{scoringRules.teamWin} points)
+                    Select the winning team (Winner gets +{scoringRules.teamWin} points, Loser gets +{scoringRules.teamLoss} points)
                   </p>
                   <div className="grid gap-3">
                     {teams.map(team => (
@@ -508,11 +548,18 @@ const ScoreEntry = ({
                                 </span>
                               </div>
                               
-                              <div className="flex justify-between">
-                                <span>Individual Performance Bonus:</span>
-                                <span className={summary.individual_bonuses > 0 ? 'text-green-600 font-medium' : summary.individual_bonuses < 0 ? 'text-red-600 font-medium' : ''}>
-                                  {summary.individual_bonuses > 0 ? '+' : ''}{summary.individual_bonuses} pts
-                                </span>
+                              <div className="space-y-1">
+                                <div className="flex justify-between">
+                                  <span>Individual Performance Bonuses:</span>
+                                  <span className={summary.total_individual_bonuses > 0 ? 'text-green-600 font-medium' : summary.total_individual_bonuses < 0 ? 'text-red-600 font-medium' : ''}>
+                                    {summary.total_individual_bonuses > 0 ? '+' : ''}{summary.total_individual_bonuses} pts
+                                  </span>
+                                </div>
+                                {summary.individual_bonuses.map((bonus, idx) => (
+                                  <div key={idx} className="text-xs text-gray-600 ml-4">
+                                    • {bonus.participant}: {bonus.reason} ({bonus.bonus > 0 ? '+' : ''}{bonus.bonus} pts)
+                                  </div>
+                                ))}
                               </div>
                               
                               <Separator />
