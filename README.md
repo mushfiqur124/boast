@@ -129,9 +129,24 @@ npm run dev
 ```
 
 ### Environment Setup
-- Supabase project: `qqmtgxwbnxflbttbbbba`
-- All environment variables are configured
+
+**For Local Development (Recommended for security):**
+```sh
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and add your Supabase credentials
+# VITE_SUPABASE_URL=https://your-project-id.supabase.co
+# VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+**For Lovable Development:**
+The app includes backwards-compatible fallback credentials, so it will work directly in Lovable without additional setup.
+
+**Security Notes:**
 - Database migrations are in `supabase/migrations/`
+- Never commit .env files to version control
+- The app uses environment variables when available, falls back to hardcoded values for Lovable compatibility
 
 ## 🎨 Design Philosophy
 

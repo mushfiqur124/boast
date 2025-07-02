@@ -2,8 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://qqmtgxwbnxflbttbbbba.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxbXRneHdibnhmbGJ0dGJiYmJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODc2NDgsImV4cCI6MjA2Njk2MzY0OH0.4GkMXynH7x5_rpm0FZuKOlMhw_PvjGrE0gkr_hRCUGk";
+// Try to get from environment variables first (for local development)
+// Fall back to hardcoded values (for Lovable compatibility)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://qqmtgxwbnxflbttbbbba.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxbXRneHdibnhmbGJ0dGJiYmJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODc2NDgsImV4cCI6MjA2Njk2MzY0OH0.4GkMXynH7x5_rpm0FZuKOlMhw_PvjGrE0gkr_hRCUGk";
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error(
+    'Missing Supabase configuration. Please check your environment setup.'
+  );
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
