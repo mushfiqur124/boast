@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { Trophy } from "lucide-react";
 
 interface Activity {
   id: string;
@@ -326,21 +327,24 @@ const ScoreEntry = ({
         if (scoresError) throw scoresError;
       }
 
-      // Mark activity as completed and store winner
+      // Calculate winner based on activity type
       let winner = '';
       if (activity.type === 'team') {
+        // For team activities, find team with highest points
         if (selectedWinnerTeam) {
           const winningTeam = teams.find(t => t.id === selectedWinnerTeam);
           winner = winningTeam?.name || '';
         }
       } else {
+        // For individual activities, find team with highest total points
         const teamSummaries = calculateTeamSummaries();
-        const sortedSummaries = teamSummaries.sort((a, b) => b.total_score - a.total_score);
-        if (sortedSummaries.length > 0) {
+        const sortedSummaries = teamSummaries.sort((a, b) => b.final_points - a.final_points);
+        if (sortedSummaries.length > 0 && sortedSummaries[0].final_points > 0) {
           winner = sortedSummaries[0].team_name;
         }
       }
 
+      // Mark activity as completed and store winner
       const { error: activityError } = await supabase
         .from('activities')
         .update({ 
@@ -423,7 +427,7 @@ const ScoreEntry = ({
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enter Scores: {activity.name}</DialogTitle>
           <DialogDescription>
@@ -492,7 +496,7 @@ const ScoreEntry = ({
             </div>
           ) : (
             // Individual scoring
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-3 gap-6">
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg">Individual Scores</h3>
                 {teams.map(team => {
@@ -576,6 +580,124 @@ const ScoreEntry = ({
                       ))}
                   </div>
                 )}
+              </div>
+
+              {/* Individual Leaderboard & Podium */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-lg flex items-center">
+                  <Trophy className="h-5 w-5 mr-2 text-yellow-500" />
+                  Individual Leaderboard
+                </h3>
+                
+                {(() => {
+                  // Get all participants with scores, sorted by score descending
+                  const allParticipantsWithScores = participants
+                    .map(p => ({
+                      ...p,
+                      score: individualScores[p.id] || 0,
+                      team_name: teams.find(t => t.id === p.team_id)?.name || 'Unknown'
+                    }))
+                    .filter(p => p.score > 0)
+                    .sort((a, b) => b.score - a.score);
+
+                  if (allParticipantsWithScores.length === 0) {
+                    return (
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-center text-gray-500 py-8">
+                            <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                            <p>Enter scores to see the leaderboard!</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+
+                  const topThree = allParticipantsWithScores.slice(0, 3);
+                  const restOfParticipants = allParticipantsWithScores.slice(3);
+
+                  return (
+                    <div className="space-y-4">
+                      {/* Podium */}
+                      <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-base text-center flex items-center justify-center">
+                            
+                            🏆 Podium
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex items-end justify-center space-x-4 mb-4">
+                            {/* 2nd Place */}
+                            {topThree[1] && (
+                              <div className="text-center transform hover:scale-105 transition-transform">
+                                <div className="w-16 h-12 bg-gradient-to-t from-gray-300 to-gray-200 rounded-t-lg flex items-center justify-center mb-2 border-2 border-gray-400">
+                                  <span className="text-white font-bold text-lg">2</span>
+                                </div>
+                                <div className="text-xs font-medium">{topThree[1].name}</div>
+                                <div className="text-xs text-gray-600">{topThree[1].score} {activity.unit}</div>
+                                <div className="text-xs text-blue-600">({topThree[1].team_name})</div>
+                              </div>
+                            )}
+
+                            {/* 1st Place */}
+                            {topThree[0] && (
+                              <div className="text-center transform hover:scale-105 transition-transform">
+                                <div className="w-16 h-16 bg-gradient-to-t from-yellow-400 to-yellow-300 rounded-t-lg flex items-center justify-center mb-2 border-2 border-yellow-500 shadow-lg">
+                                  <span className="text-white font-bold text-xl">1</span>
+                                </div>
+                                <div className="text-sm font-bold text-yellow-700">{topThree[0].name}</div>
+                                <div className="text-sm font-medium text-yellow-600">{topThree[0].score} {activity.unit}</div>
+                                <div className="text-xs text-blue-600">({topThree[0].team_name})</div>
+                              </div>
+                            )}
+
+                            {/* 3rd Place */}
+                            {topThree[2] && (
+                              <div className="text-center transform hover:scale-105 transition-transform">
+                                <div className="w-16 h-10 bg-gradient-to-t from-amber-600 to-amber-500 rounded-t-lg flex items-center justify-center mb-2 border-2 border-amber-700">
+                                  <span className="text-white font-bold">3</span>
+                                </div>
+                                <div className="text-xs font-medium">{topThree[2].name}</div>
+                                <div className="text-xs text-gray-600">{topThree[2].score} {activity.unit}</div>
+                                <div className="text-xs text-blue-600">({topThree[2].team_name})</div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Rest of participants */}
+                      {restOfParticipants.length > 0 && (
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Other Participants</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              {restOfParticipants.map((participant, index) => (
+                                <div key={participant.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                                  <div className="flex items-center space-x-3">
+                                    <span className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                                      {index + 4}
+                                    </span>
+                                    <div>
+                                      <div className="text-sm font-medium">{participant.name}</div>
+                                      <div className="text-xs text-blue-600">({participant.team_name})</div>
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs">
+                                    {participant.score} {activity.unit}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

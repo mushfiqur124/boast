@@ -18,6 +18,7 @@ export type Database = {
           name: string
           type: string
           unit: string | null
+          winner: string | null
         }
         Insert: {
           competition_id: string
@@ -27,6 +28,7 @@ export type Database = {
           name: string
           type: string
           unit?: string | null
+          winner?: string | null
         }
         Update: {
           competition_id?: string
@@ -36,6 +38,7 @@ export type Database = {
           name?: string
           type?: string
           unit?: string | null
+          winner?: string | null
         }
         Relationships: [
           {

@@ -1,0 +1,208 @@
+# Boast - Team Competition Management App
+
+## Project Overview
+Boast is a web application designed to help groups of friends organize team competitions. Built for scenarios like "Dawg Olympics" where friends split into teams, draft players, compete in activities, and track scores.
+
+## Tech Stack
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI Library**: shadcn/ui components with Radix UI primitives
+- **Styling**: Tailwind CSS with custom theming
+- **Database**: Supabase (PostgreSQL with real-time features)
+- **State Management**: React Query (@tanstack/react-query) for server state
+- **Routing**: React Router DOM
+- **Icons**: Lucide React
+- **Notifications**: Sonner toasts
+
+## Database Schema
+### Core Tables:
+- `competitions`: Main competition instances with unique codes
+- `teams`: Team data (2 teams per competition) with captains and scores
+- `participants`: Individual players assigned to teams
+- `activities`: Competition events (team-based or individual scoring)
+- `scores`: Results tracking with support for both team and individual scores
+
+### Key Relationships:
+- Competition → Teams (1:many)
+- Teams → Participants (1:many)
+- Competition → Activities (1:many)
+- Activities → Scores (1:many)
+- Scores can link to either Teams or Participants
+
+## Project Structure
+```
+src/
+├── components/           # Main feature components
+│   ├── ui/              # shadcn/ui components
+│   ├── TeamDraft.tsx    # Team drafting with coin flip
+│   ├── Activities.tsx   # Activity management
+│   ├── Scoring.tsx      # Scoring configuration
+│   ├── ScoreEntry.tsx   # Score input interface
+│   └── Dashboard.tsx    # Competition overview
+├── pages/               # Route components
+│   ├── Index.tsx        # Homepage (create/join)
+│   ├── Competition.tsx  # Main competition interface
+│   └── NotFound.tsx     # 404 page
+├── integrations/        # External service integrations
+│   └── supabase/        # Supabase client and types
+├── lib/                 # Utilities
+└── hooks/               # Custom React hooks
+```
+
+## Key Features Implemented
+
+### 1. Competition Management
+- Create competitions with unique 6-character codes
+- Join existing competitions using codes
+- No authentication required - code-based access
+
+### 2. Team Drafting
+- Add participants to draft pool
+- Designate team captains (creates teams)
+- Coin flip mechanism for draft order
+- Drag-and-drop player assignment
+- Real-time draft status tracking
+
+### 3. Activity System
+- Support for team-based and individual activities
+- Preset activities (Push-ups, Beer Pong, Flag Football, etc.)
+- Custom activity creation
+- Activity completion tracking
+
+### 4. Scoring System
+- Configurable scoring rules:
+  - Team win/loss points (default: 50/0)
+  - Individual placement bonuses (1st: +10, 2nd: +5, Last: -5)
+- Support for negative points (penalties)
+- Automatic calculation of team totals
+- Individual score tracking with team aggregation
+
+### 5. Dashboard
+- Team leaderboard with live scoring
+- Activity completion status
+- Participant statistics
+- Competition overview metrics
+
+## Development Guidelines
+
+### KISS Principle
+- **Keep It Simple, Stupid** - Always choose the simplest solution that works
+- Before making big changes, consider downstream effects and related impacts
+- Prefer simple, readable code over complex abstractions
+- When in doubt, implement the most straightforward approach
+
+### Code Style
+- Use TypeScript for all new files
+- Follow React functional component patterns
+- Prefer custom hooks for stateful logic
+- Use proper TypeScript interfaces for data structures
+
+### Component Patterns
+- Use shadcn/ui components as base building blocks
+- Implement loading states for all async operations
+- Handle error states with toast notifications
+- Use React Query for server state management
+
+### Database Operations
+- Always use the Supabase MCP tools for schema changes
+- Use TypeScript types generated from Supabase schema
+- Implement proper error handling for all database operations
+- Use transactions for related data updates
+
+### UI/UX Guidelines
+- Maintain consistent spacing and typography using Tailwind
+- Use loading skeletons for better perceived performance
+- Implement responsive design (mobile-first approach)
+- Use appropriate icons from Lucide React
+- Follow shadcn/ui theming patterns
+
+### State Management
+- Use React Query for server state (competitions, teams, scores)
+- Use local storage for temporary/draft data when appropriate
+- Prefer lifting state up over complex state management
+- Use proper dependency arrays in useEffect hooks
+
+## Common Patterns
+
+### Supabase Queries
+```typescript
+const { data, error } = await supabase
+  .from('table_name')
+  .select('*')
+  .eq('filter_column', value);
+
+if (error) throw error;
+```
+
+### Toast Notifications
+```typescript
+import { toast } from "@/hooks/use-toast";
+
+toast({
+  title: "Success",
+  description: "Operation completed successfully",
+});
+
+// For errors
+toast({
+  title: "Error", 
+  description: "Something went wrong",
+  variant: "destructive",
+});
+```
+
+### Loading States
+```typescript
+const [loading, setLoading] = useState(true);
+
+// In async operations
+setLoading(true);
+try {
+  // async operation
+} finally {
+  setLoading(false);
+}
+```
+
+## Environment Setup
+- Supabase project: `qqmtgxwbnxflbttbbbba`
+- All environment variables are configured
+- Use `npm run dev` for development
+- Database migrations are in `supabase/migrations/`
+
+## Testing & Deployment
+- No authentication required - test with competition codes
+- Use Supabase MCP for database operations during development
+- Lovable integration for deployments
+- Always test multi-team scenarios
+
+## Common Operations
+
+### Creating New Activities
+1. Add to preset list in Activities.tsx if commonly used
+2. Support both 'team' and 'individual' types
+3. Include appropriate units for individual activities
+
+### Adding New Scoring Features
+1. Update scoring rules interface in Scoring.tsx
+2. Modify calculation logic in ScoreEntry.tsx
+3. Update dashboard displays accordingly
+
+### Database Schema Changes
+1. Use Supabase MCP tools for migrations
+2. Update TypeScript types afterwards
+3. Test with existing data
+
+## Notes
+- Competition codes are 6 characters (letters + numbers)
+- Teams are limited to 2 per competition
+- Scores support negative values for penalties
+- Individual scores aggregate to team totals
+- Real-time updates are supported via Supabase
+- No user authentication - purely code-based access
+
+## Future Enhancements
+- Export to CSV functionality
+- Real-time score updates across devices
+- Photo uploads for activities
+- Advanced analytics and statistics
+- Custom competition templates 

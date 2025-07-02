@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Crown, Coins, Sparkles } from "lucide-react";
+import { Plus, Crown, Coins, Sparkles, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -33,6 +33,7 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
   const [showConfetti, setShowConfetti] = useState(false);
   const [draftComplete, setDraftComplete] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -67,14 +68,29 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
 
       // For now, we'll track unassigned participants in localStorage
       // In a full implementation, you might want a separate table for this
-      const localParticipants = JSON.parse(localStorage.getItem(`unassigned_participants_${competitionCode}`) || '[]');
-      setParticipants(localParticipants);
+      const unassignedParticipants = JSON.parse(localStorage.getItem(`unassigned_participants_${competitionCode}`) || '[]');
+      setParticipants(unassignedParticipants);
 
-      // Check draft status from localStorage for now
+      // Check draft status from localStorage
       const draftStatus = JSON.parse(localStorage.getItem(`draft_status_${competitionCode}`) || '{}');
-      setDraftActive(draftStatus.active || false);
-      setCurrentPick(draftStatus.currentPick || '');
-      setDraftComplete(draftStatus.complete || false);
+      
+      // Auto-detect if draft is complete based on actual data
+      const hasTeamsWithParticipants = formattedTeams.length === 2 && formattedTeams.every(team => team.participants.length > 1); // captain + drafted players
+      const noUnassignedParticipants = unassignedParticipants.length === 0;
+      const isDraftComplete = hasTeamsWithParticipants && noUnassignedParticipants;
+      
+      setDraftActive(isDraftComplete ? false : (draftStatus.active || false));
+      setCurrentPick(isDraftComplete ? '' : (draftStatus.currentPick || ''));
+      setDraftComplete(isDraftComplete || draftStatus.complete || false);
+      
+      // Update localStorage if we detected completion
+      if (isDraftComplete && !draftStatus.complete) {
+        localStorage.setItem(`draft_status_${competitionCode}`, JSON.stringify({
+          active: false,
+          currentPick: '',
+          complete: true
+        }));
+      }
 
     } catch (error) {
       console.error('Error loading draft data:', error);
@@ -251,11 +267,64 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
         complete: updatedParticipants.length === 0
       }));
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error drafting player:', error);
+      
+      // Handle duplicate participant constraint violation
+      if (error?.code === '23505' && error?.message?.includes('unique_participant_per_team')) {
+        toast({
+          title: "Player Already on Team",
+          description: `${participant.name} is already on this team`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to draft player",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const removeParticipant = async (participantId: string, participantName: string) => {
+    // Don't allow removing captains
+    const isCaptain = teams.some(team => team.captain === participantName);
+    if (isCaptain) {
+      toast({
+        title: "Cannot Remove Captain",
+        description: "Team captains cannot be removed",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Remove from database
+      const { error } = await supabase
+        .from('participants')
+        .delete()
+        .eq('id', participantId);
+
+      if (error) throw error;
+
+      // Update local state
+      const updatedTeams = teams.map(team => ({
+        ...team,
+        participants: team.participants.filter(p => p.id !== participantId)
+      }));
+
+      setTeams(updatedTeams);
+
+      toast({
+        title: "Participant Removed",
+        description: `${participantName} has been removed from the team`,
+      });
+    } catch (error) {
+      console.error('Error removing participant:', error);
       toast({
         title: "Error",
-        description: "Failed to draft player",
+        description: "Failed to remove participant",
         variant: "destructive",
       });
     }
@@ -310,9 +379,18 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
       {draftComplete && (
         <Card className="border-green-200 bg-green-50">
           <CardHeader>
-            <CardTitle className="text-green-800 flex items-center">
-              <Crown className="h-5 w-5 mr-2" />
-              Draft Complete!
+            <CardTitle className="text-green-800 flex items-center justify-between">
+              <div className="flex items-center">
+                <Crown className="h-5 w-5 mr-2" />
+                Draft Complete!
+              </div>
+              <Button
+                variant={editMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode(!editMode)}
+              >
+                {editMode ? "Done Editing" : "Edit Teams"}
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -327,8 +405,23 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
                   <div className="space-y-1">
                     {team.participants
                       .filter(member => member.name !== team.captain) // Don't show captain twice
+                      .filter((member, index, arr) => 
+                        arr.findIndex(m => m.name === member.name) === index // Remove duplicates by name
+                      )
                       .map(member => (
-                        <Badge key={member.id} variant="secondary">{member.name}</Badge>
+                        <div key={member.id} className="flex items-center gap-2">
+                          <Badge variant="secondary">{member.name}</Badge>
+                          {editMode && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
+                              onClick={() => removeParticipant(member.id, member.name)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       ))}
                   </div>
                   <p className="text-sm text-gray-500 mt-2">
@@ -405,79 +498,81 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
           </div>
         )}
 
-        {/* Main Area - Teams */}
-        <div className={draftComplete ? "lg:col-span-4" : "lg:col-span-3"}>
-          <div className="grid md:grid-cols-2 gap-6">
-            {teams.map(team => (
-              <Card 
-                key={team.id}
-                className={`${
-                  draftActive && currentPick === team.id 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : ''
-                }`}
-              >
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Crown className="h-5 w-5 mr-2 text-yellow-500" />
-                    {team.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <Badge variant="outline">Captain: {team.captain}</Badge>
-                    {team.participants
-                      .filter(member => member.name !== team.captain) // Don't show captain twice
-                      .map(member => (
-                        <Badge key={member.id} variant="secondary">{member.name}</Badge>
-                      ))}
-                  </div>
-                  
-                  {draftActive && currentPick === team.id && participants.length > 0 && (
-                    <div className="mt-4 p-3 bg-white rounded border-2 border-dashed border-blue-300">
-                      <p className="text-sm text-blue-600 font-medium mb-2">
-                        Click to select:
-                      </p>
-                      <div className="space-y-1">
-                        {participants.map(participant => (
-                          <Button
-                            key={participant.id}
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start"
-                            onClick={() => draftPlayer(participant.id, team.id)}
-                          >
-                            {participant.name}
-                          </Button>
+        {/* Main Area - Teams (only show when draft not complete) */}
+        {!draftComplete && (
+          <div className="lg:col-span-3">
+            <div className="grid md:grid-cols-2 gap-6">
+              {teams.map(team => (
+                <Card 
+                  key={team.id}
+                  className={`${
+                    draftActive && currentPick === team.id 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : ''
+                  }`}
+                >
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Crown className="h-5 w-5 mr-2 text-yellow-500" />
+                      {team.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <Badge variant="outline">Captain: {team.captain}</Badge>
+                      {team.participants
+                        .filter(member => member.name !== team.captain) // Don't show captain twice
+                        .map(member => (
+                          <Badge key={member.id} variant="secondary">{member.name}</Badge>
                         ))}
-                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-            
-            {teams.length < 2 && (
-              <Card className="border-dashed border-gray-300">
-                <CardContent className="pt-6">
-                  <div className="text-center text-gray-500">
-                    <Crown className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>Select captains from participants</p>
-                  </div>
-                </CardContent>
-              </Card>
+                    
+                    {draftActive && currentPick === team.id && participants.length > 0 && (
+                      <div className="mt-4 p-3 bg-white rounded border-2 border-dashed border-blue-300">
+                        <p className="text-sm text-blue-600 font-medium mb-2">
+                          Click to select:
+                        </p>
+                        <div className="space-y-1">
+                          {participants.map(participant => (
+                            <Button
+                              key={participant.id}
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start"
+                              onClick={() => draftPlayer(participant.id, team.id)}
+                            >
+                              {participant.name}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {teams.length < 2 && (
+                <Card className="border-dashed border-gray-300">
+                  <CardContent className="pt-6">
+                    <div className="text-center text-gray-500">
+                      <Crown className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>Select captains from participants</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {teams.length === 2 && !draftActive && !draftComplete && (
+              <div className="mt-6 text-center">
+                <Button onClick={startDraft} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500">
+                  <Coins className="h-4 w-4 mr-2" />
+                  Start Draft
+                </Button>
+              </div>
             )}
           </div>
-
-          {teams.length === 2 && !draftActive && !draftComplete && (
-            <div className="mt-6 text-center">
-              <Button onClick={startDraft} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500">
-                <Coins className="h-4 w-4 mr-2" />
-                Start Draft
-              </Button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

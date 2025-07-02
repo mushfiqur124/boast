@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,10 +25,18 @@ interface Participant {
   team_id: string;
 }
 
+interface ActivityScore {
+  activity_id: string;
+  team_id: string;
+  team_name: string;
+  points_earned: number;
+}
+
 const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [activityScores, setActivityScores] = useState<ActivityScore[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,11 +75,55 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
         setParticipants(participantsData || []);
       }
 
+      // Load activity scores for completed activities
+      if (activitiesData && activitiesData.length > 0 && teamsData && teamsData.length > 0) {
+        const completedActivityIds = activitiesData.filter(a => a.completed).map(a => a.id);
+        
+        if (completedActivityIds.length > 0) {
+          const { data: scoresData, error: scoresError } = await supabase
+            .from('scores')
+            .select('activity_id, team_id, points_earned')
+            .in('activity_id', completedActivityIds)
+            .eq('score_type', 'team')
+            .not('team_id', 'is', null);
+
+          if (scoresError) throw scoresError;
+
+          // Map scores with team names
+          const scoresWithTeamNames: ActivityScore[] = (scoresData || []).map(score => {
+            const team = teamsData.find(t => t.id === score.team_id);
+            return {
+              activity_id: score.activity_id,
+              team_id: score.team_id!,
+              team_name: team?.name || 'Unknown Team',
+              points_earned: score.points_earned
+            };
+          });
+
+          setActivityScores(scoresWithTeamNames);
+        }
+      }
+
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getActivityScoreDisplay = (activityId: string) => {
+    const scores = activityScores.filter(score => score.activity_id === activityId);
+    if (scores.length === 0) return null;
+
+    return scores.map(score => (
+      <Badge 
+        key={score.team_id} 
+        variant="outline" 
+        className={`ml-1 ${score.points_earned > 0 ? 'bg-green-100 text-green-800' : score.points_earned < 0 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}
+      >
+        {score.team_name}: {score.points_earned > 0 ? '+' : ''}{score.points_earned}
+      </Badge>
+    ));
   };
 
   const completedActivities = activities.filter(a => a.completed).length;
@@ -187,17 +238,20 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
                     ) : (
                       <Trophy className="h-5 w-5 text-purple-500" />
                     )}
-                    <span className="font-medium">{activity.name}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={activity.completed ? 'default' : 'secondary'}>
-                      {activity.completed ? 'Completed' : 'Pending'}
-                    </Badge>
-                    {activity.completed && activity.winner && (
-                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                        Winner: {activity.winner}
-                      </Badge>
-                    )}
+                    <div className="flex-1">
+                      <span className="font-medium">{activity.name}</span>
+                      <div className="flex items-center flex-wrap mt-1">
+                        <Badge variant={activity.completed ? 'default' : 'secondary'}>
+                          {activity.completed ? 'Completed' : 'Pending'}
+                        </Badge>
+                        {activity.completed && activity.winner && (
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 ml-1">
+                            🏆 {activity.winner}
+                          </Badge>
+                        )}
+                        {activity.completed && getActivityScoreDisplay(activity.id)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))

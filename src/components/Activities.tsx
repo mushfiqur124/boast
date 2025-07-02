@@ -282,7 +282,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
                         )}
                         {activity.completed && activity.winner && (
                           <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                            Winner: {activity.winner}
+                            🏆 {activity.winner}
                           </Badge>
                         )}
                       </div>
