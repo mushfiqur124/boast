@@ -126,7 +126,7 @@ const Index = () => {
           <div className="flex items-center justify-center mb-6">
             <Trophy className="h-16 w-16 text-amber-500 mr-4 drop-shadow-md" />
             <h1 className="text-6xl font-bold text-gray-900 drop-shadow-lg">
-              Boast
+               Boast
             </h1>
           </div>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
@@ -139,36 +139,13 @@ const Index = () => {
           {/* Competition Illustration */}
           <div className="flex justify-center lg:justify-end">
             <div className="relative">
-              {/* Simple SVG podium - much smaller than 1.3MB image */}
-              <div className="w-64 md:w-80 lg:w-96 h-auto hover:scale-105 transition-transform duration-300 drop-shadow-lg">
-                <svg viewBox="0 0 300 200" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {/* Podium base */}
-                  <rect x="50" y="120" width="60" height="80" fill="#FFD700" stroke="#FFA500" strokeWidth="2" rx="4"/>
-                  <rect x="120" y="80" width="60" height="120" fill="#FFD700" stroke="#FFA500" strokeWidth="2" rx="4"/>
-                  <rect x="190" y="140" width="60" height="60" fill="#FFD700" stroke="#FFA500" strokeWidth="2" rx="4"/>
-                  
-                  {/* Podium numbers */}
-                  <text x="80" y="165" textAnchor="middle" className="fill-current text-amber-800 font-bold text-2xl">2</text>
-                  <text x="150" y="145" textAnchor="middle" className="fill-current text-amber-800 font-bold text-2xl">1</text>
-                  <text x="220" y="175" textAnchor="middle" className="fill-current text-amber-800 font-bold text-2xl">3</text>
-                  
-                  {/* Trophy on top */}
-                  <g transform="translate(140, 45)">
-                    <ellipse cx="10" cy="15" rx="12" ry="8" fill="#FFD700"/>
-                    <rect x="8" y="20" width="4" height="15" fill="#FFA500"/>
-                    <rect x="4" y="32" width="12" height="6" fill="#FFD700" rx="2"/>
-                    <circle cx="10" cy="10" r="3" fill="#FFF" opacity="0.3"/>
-                  </g>
-                  
-                  {/* Confetti */}
-                  <circle cx="70" cy="30" r="2" fill="#FF6B6B"/>
-                  <circle cx="230" cy="40" r="2" fill="#4ECDC4"/>
-                  <circle cx="40" cy="50" r="2" fill="#45B7D1"/>
-                  <circle cx="260" cy="60" r="2" fill="#96CEB4"/>
-                  <circle cx="80" cy="20" r="2" fill="#FFEAA7"/>
-                  <circle cx="220" cy="25" r="2" fill="#DDA0DD"/>
-                </svg>
-              </div>
+              {/* Original landing page image from GitHub Releases */}
+              <img 
+                src="https://github.com/mushfiqur124/boast/releases/download/v1.0.0/landing-page-image.png" 
+                alt="Competition trophy and podium illustration"
+                className="w-64 md:w-80 lg:w-96 h-auto hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+                loading="lazy"
+              />
             </div>
           </div>
 
