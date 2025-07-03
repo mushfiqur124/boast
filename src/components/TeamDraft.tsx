@@ -7,6 +7,7 @@ import { Plus, Crown, Coins, Sparkles, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import confetti from 'canvas-confetti';
 
 interface Participant {
   id: string;
@@ -19,6 +20,11 @@ interface Team {
   name: string;
   captain: string;
   participants: Participant[];
+}
+
+interface PostgreSQLError extends Error {
+  code?: string;
+  message: string;
 }
 
 const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
@@ -34,6 +40,11 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
   const [draftComplete, setDraftComplete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  
+  // New state for team heads/tails selection
+  const [teamSelectionPhase, setTeamSelectionPhase] = useState(true);
+  const [headsTeamId, setHeadsTeamId] = useState<string>('');
+  const [tailsTeamId, setTailsTeamId] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -185,7 +196,36 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
 
   const startDraft = () => {
     if (teams.length !== 2) return;
+    setTeamSelectionPhase(true);
+    setHeadsTeamId('');
+    setTailsTeamId('');
     setCoinFlipVisible(true);
+  };
+
+  const closeCoinFlip = () => {
+    setCoinFlipVisible(false);
+    setTeamSelectionPhase(true);
+    setHeadsTeamId('');
+    setTailsTeamId('');
+    setCoinFlipping(false);
+    setCoinResult('');
+    setShowConfetti(false);
+  };
+
+  const selectHeadsTails = (teamId: string, choice: 'heads' | 'tails') => {
+    const otherTeamId = teams.find(t => t.id !== teamId)?.id || '';
+    
+    if (choice === 'heads') {
+      setHeadsTeamId(teamId);
+      setTailsTeamId(otherTeamId);
+    } else {
+      setTailsTeamId(teamId);
+      setHeadsTeamId(otherTeamId);
+    }
+  };
+
+  const proceedToFlip = () => {
+    setTeamSelectionPhase(false);
   };
 
   const flipCoin = () => {
@@ -193,10 +233,44 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
     
     setTimeout(() => {
       const isHeads = Math.random() > 0.5;
-      const winner = isHeads ? teams[0] : teams[1];
-      setCoinResult(`${isHeads ? 'Heads' : 'Tails'}! ${winner.name} picks first!`);
-      setCurrentPick(winner.id);
-      setShowConfetti(true);
+      const winnerTeamId = isHeads ? headsTeamId : tailsTeamId;
+      const winner = teams.find(t => t.id === winnerTeamId);
+      
+      if (winner) {
+        setCoinResult(`${isHeads ? 'Heads' : 'Tails'}! ${winner.name} picks first!`);
+        setCurrentPick(winner.id);
+        setShowConfetti(true);
+        
+        // Trigger spectacular confetti effect
+        const duration = 3000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+        function randomInRange(min: number, max: number) {
+          return Math.random() * (max - min) + min;
+        }
+
+        const interval = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
+
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+
+          const particleCount = 50 * (timeLeft / duration);
+          
+          // Since particles fall down, start a bit higher than random
+          confetti(Object.assign({}, defaults, { 
+            particleCount,
+            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+          }));
+          confetti(Object.assign({}, defaults, { 
+            particleCount,
+            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+          }));
+        }, 250);
+      }
+      
       setCoinFlipping(false);
       
       setTimeout(() => {
@@ -207,7 +281,7 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
         // Save draft status
         localStorage.setItem(`draft_status_${competitionCode}`, JSON.stringify({
           active: true,
-          currentPick: winner.id,
+          currentPick: winnerTeamId,
           complete: false
         }));
       }, 3000);
@@ -253,6 +327,44 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
       if (updatedParticipants.length === 0) {
         setDraftActive(false);
         setDraftComplete(true);
+        
+        // Trigger draft completion confetti celebration
+        const duration = 4000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+        function randomInRange(min: number, max: number) {
+          return Math.random() * (max - min) + min;
+        }
+
+        // More intense confetti for draft completion
+        const interval = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
+
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+
+          const particleCount = 100 * (timeLeft / duration);
+          
+          // Multiple bursts from different positions
+          confetti(Object.assign({}, defaults, { 
+            particleCount,
+            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+            colors: ['#FFD700', '#FFA500', '#FF6347', '#32CD32', '#4169E1']
+          }));
+          confetti(Object.assign({}, defaults, { 
+            particleCount,
+            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+            colors: ['#FFD700', '#FFA500', '#FF6347', '#32CD32', '#4169E1']
+          }));
+          confetti(Object.assign({}, defaults, { 
+            particleCount: particleCount * 0.7,
+            origin: { x: 0.5, y: Math.random() - 0.1 },
+            colors: ['#FFD700', '#FFA500', '#FF6347', '#32CD32', '#4169E1']
+          }));
+        }, 250);
+        
         toast({
           title: "Draft Complete!",
           description: "All players have been drafted to teams",
@@ -267,11 +379,12 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
         complete: updatedParticipants.length === 0
       }));
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error drafting player:', error);
       
       // Handle duplicate participant constraint violation
-      if (error?.code === '23505' && error?.message?.includes('unique_participant_per_team')) {
+      const pgError = error as PostgreSQLError;
+      if (pgError?.code === '23505' && pgError?.message?.includes('unique_participant_per_team')) {
         toast({
           title: "Player Already on Team",
           description: `${participant.name} is already on this team`,
@@ -337,16 +450,74 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
   return (
     <div className="space-y-6">
       {/* Coin Flip Modal */}
-      <Dialog open={coinFlipVisible}>
+      <Dialog open={coinFlipVisible} onOpenChange={(open) => !open && closeCoinFlip()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-center">Coin Flip for First Pick</DialogTitle>
+            <DialogTitle className="text-center">
+              {teamSelectionPhase ? "Choose Heads or Tails" : "Coin Flip for First Pick"}
+            </DialogTitle>
             <DialogDescription className="text-center">
-              {teams[0]?.name} = Heads | {teams[1]?.name} = Tails
+              {teamSelectionPhase 
+                ? "Each team picks heads or tails, then we'll flip!"
+                : `${teams.find(t => t.id === headsTeamId)?.name} = Heads | ${teams.find(t => t.id === tailsTeamId)?.name} = Tails`
+              }
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center space-y-4 py-6">
-            {!coinFlipping && !coinResult && (
+            {teamSelectionPhase && (
+              <>
+                <div className="space-y-4 w-full">
+                  {teams.map(team => {
+                    const teamChoice = headsTeamId === team.id ? 'heads' : tailsTeamId === team.id ? 'tails' : null;
+                    return (
+                      <div key={team.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center">
+                          <Crown className="h-4 w-4 mr-2 text-yellow-500" />
+                          <span className="font-medium">{team.name}</span>
+                          {teamChoice && (
+                            <Badge variant="secondary" className="ml-2">
+                              {teamChoice.charAt(0).toUpperCase() + teamChoice.slice(1)}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant={headsTeamId === team.id ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => selectHeadsTails(team.id, 'heads')}
+                            disabled={headsTeamId && headsTeamId !== team.id}
+                          >
+                            Heads
+                          </Button>
+                          <Button
+                            variant={tailsTeamId === team.id ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => selectHeadsTails(team.id, 'tails')}
+                            disabled={tailsTeamId && tailsTeamId !== team.id}
+                          >
+                            Tails
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {headsTeamId && tailsTeamId && (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600 mb-3">
+                      {teams.find(t => t.id === headsTeamId)?.name} chose Heads, {teams.find(t => t.id === tailsTeamId)?.name} chose Tails
+                    </p>
+                    <Button onClick={proceedToFlip} size="lg">
+                      <Coins className="h-4 w-4 mr-2" />
+                      Ready to Flip!
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!teamSelectionPhase && !coinFlipping && !coinResult && (
               <>
                 <Coins className={`h-24 w-24 text-yellow-500`} />
                 <Button onClick={flipCoin} size="lg">
@@ -377,7 +548,7 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
 
       {/* Draft Complete Summary */}
       {draftComplete && (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-green-200 bg-green-50 shadow-sm">
           <CardHeader>
             <CardTitle className="text-green-800 flex items-center justify-between">
               <div className="flex items-center">
@@ -505,7 +676,7 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
               {teams.map(team => (
                 <Card 
                   key={team.id}
-                  className={`${
+                  className={`shadow-sm ${
                     draftActive && currentPick === team.id 
                       ? 'border-blue-500 bg-blue-50' 
                       : ''
@@ -552,7 +723,7 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
               ))}
               
               {teams.length < 2 && (
-                <Card className="border-dashed border-gray-300">
+                <Card className="border-dashed border-gray-300 shadow-sm">
                   <CardContent className="pt-6">
                     <div className="text-center text-gray-500">
                       <Crown className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -564,9 +735,13 @@ const TeamDraft = ({ competitionCode, competitionId }: { competitionCode: string
             </div>
 
             {teams.length === 2 && !draftActive && !draftComplete && (
-              <div className="mt-6 text-center">
-                <Button onClick={startDraft} size="lg" className="bg-gradient-to-r from-blue-500 to-purple-500">
-                  <Coins className="h-4 w-4 mr-2" />
+              <div className="mt-8 text-center">
+                <Button 
+                  onClick={startDraft} 
+                  size="lg" 
+                  className="px-8 py-6 text-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Coins className="h-5 w-5 mr-3" />
                   Start Draft
                 </Button>
               </div>

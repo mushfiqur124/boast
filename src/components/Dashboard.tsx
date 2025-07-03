@@ -137,7 +137,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
               <Users className="h-8 w-8 text-blue-500" />
@@ -149,7 +149,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
               <Star className="h-8 w-8 text-purple-500" />
@@ -161,7 +161,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
               <Target className="h-8 w-8 text-green-500" />
@@ -173,7 +173,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="pt-6">
             <div className="flex items-center space-x-2">
               <Trophy className="h-8 w-8 text-yellow-500" />
@@ -187,7 +187,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
       </div>
 
       {/* Leaderboard */}
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center">
             <Trophy className="h-5 w-5 mr-2 text-yellow-500" />
@@ -221,7 +221,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
       </Card>
 
       {/* Activities Progress */}
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Activities Progress</CardTitle>
         </CardHeader>
@@ -236,7 +236,7 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
                     {activity.type === 'team' ? (
                       <Users className="h-5 w-5 text-blue-500" />
                     ) : (
-                      <Trophy className="h-5 w-5 text-purple-500" />
+                      <Trophy className="h-5 w-5 text-amber-500" />
                     )}
                     <div className="flex-1">
                       <span className="font-medium">{activity.name}</span>

@@ -20,6 +20,12 @@ interface Activity {
   winner?: string;
 }
 
+interface PresetActivity {
+  name: string;
+  type: string;
+  unit: string;
+}
+
 const Activities = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [newActivity, setNewActivity] = useState({
@@ -106,7 +112,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
     { name: 'Mario Kart', type: 'team', unit: '' },
   ];
 
-  const addPresetActivity = async (preset: any) => {
+  const addPresetActivity = async (preset: PresetActivity) => {
     try {
       const { data, error } = await supabase
         .from('activities')
@@ -215,7 +221,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
       </div>
 
       {/* Quick Add Presets */}
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Quick Add Popular Activities</CardTitle>
         </CardHeader>
@@ -232,9 +238,9 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
                   className="justify-start"
                 >
                   {preset.type === 'team' ? (
-                    <Users className="h-3 w-3 mr-1" />
+                    <Users className="h-3 w-3 mr-1 text-blue-600" />
                   ) : (
-                    <Trophy className="h-3 w-3 mr-1" />
+                    <Trophy className="h-3 w-3 mr-1 text-amber-500" />
                   )}
                   {preset.name}
                 </Button>
@@ -246,7 +252,7 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
       {/* Activities List */}
       <div className="grid gap-4">
         {activities.length === 0 ? (
-          <Card>
+          <Card className="shadow-sm">
             <CardContent className="pt-6">
               <div className="text-center text-gray-500">
                 <Trophy className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -257,14 +263,14 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
           </Card>
         ) : (
           activities.map(activity => (
-            <Card key={activity.id} className={activity.completed ? 'bg-green-50' : ''}>
+            <Card key={activity.id} className={`shadow-sm ${activity.completed ? 'bg-green-50' : ''}`}>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     {activity.type === 'team' ? (
                       <Users className="h-5 w-5 text-blue-500" />
                     ) : (
-                      <Trophy className="h-5 w-5 text-purple-500" />
+                      <Trophy className="h-5 w-5 text-amber-500" />
                     )}
                     <div>
                       <h3 className="font-semibold">{activity.name}</h3>

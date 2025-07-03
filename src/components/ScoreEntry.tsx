@@ -187,6 +187,14 @@ const ScoreEntry = ({
       };
     });
 
+    // Check if any actual scores have been entered (non-zero values)
+    const hasActualScores = summaries.some(s => s.total_score > 0);
+    
+    // Only calculate bonuses and rankings if actual scores exist
+    if (!hasActualScores) {
+      return summaries;
+    }
+
     // Calculate team placement bonuses based on team totals
     const sortedByTotal = [...summaries].sort((a, b) => b.total_score - a.total_score);
     

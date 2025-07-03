@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,14 @@ const Index = () => {
   };
 
   const handleCreateCompetition = async () => {
-    if (!competitionName.trim()) return;
+    if (!competitionName.trim()) {
+      toast({
+        title: "Competition Name Required",
+        description: "Please enter a competition name.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setLoading(true);
     try {
@@ -64,7 +70,23 @@ const Index = () => {
   };
 
   const handleJoinCompetition = async () => {
-    if (!joinCode.trim()) return;
+    if (!joinCode.trim()) {
+      toast({
+        title: "Competition Code Required",
+        description: "Please enter a competition code.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (joinCode.length !== 6) {
+      toast({
+        title: "Invalid Code Length",
+        description: "Competition code must be exactly 6 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setLoading(true);
     try {
@@ -97,121 +119,133 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-50/30">
+      <div className="container mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-4">
-            <Trophy className="h-12 w-12 text-yellow-500 mr-3" />
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <div className="flex items-center justify-center mb-6">
+            <Trophy className="h-16 w-16 text-amber-500 mr-4 drop-shadow-md" />
+            <h1 className="text-6xl font-bold text-gray-900 drop-shadow-lg">
               Boast
             </h1>
           </div>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
             The ultimate team competition organizer for friend groups. Draft teams, compete in activities, and crown the champions!
           </p>
         </div>
 
-        {/* Main Action Cards */}
-        <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8 mb-12">
+        {/* Hero Section: Image + Action Cards */}
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center mb-20">
+          {/* Competition Illustration */}
+          <div className="flex justify-center lg:justify-end">
+            <div className="relative">
+              <img 
+                src="/landing-page-image.png" 
+                alt="Competition podium with winners"
+                className="w-64 md:w-80 lg:w-96 h-auto hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+              />
+            </div>
+          </div>
+
+          {/* Action Cards */}
+          <div className="space-y-8 lg:pl-8">
           {/* Create New Competition */}
-          <Card className="relative overflow-hidden border-2 border-blue-200 hover:border-blue-300 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
-            <CardHeader className="relative">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Zap className="h-6 w-6 text-blue-600" />
+          <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-200 bg-white">
+            <CardHeader className="pb-4">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-blue-50 rounded-xl">
+                  <Zap className="h-7 w-7 text-blue-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl">Start New Competition</CardTitle>
-                  <CardDescription>Create a fresh competition and gather your team</CardDescription>
+                  <CardTitle className="text-xl text-gray-900">Start New Competition</CardTitle>
+                  <CardDescription className="text-gray-500">Create a fresh competition and gather your team</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="relative space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="competition-name">Competition Name</Label>
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <Label htmlFor="competition-name" className="text-sm font-medium text-gray-700">Competition Name</Label>
                 <Input 
                   id="competition-name"
                   placeholder="e.g., Dawg Olympics 2024"
                   value={competitionName}
                   onChange={(e) => setCompetitionName(e.target.value)}
-                  className="border-blue-200 focus:border-blue-400"
+                  className="border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
               <Button 
                 onClick={handleCreateCompetition}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
-                disabled={!competitionName.trim() || loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white border-0 h-11"
+                disabled={loading}
               >
                 {loading ? "Creating..." : "Create Competition"}
               </Button>
             </CardContent>
           </Card>
 
-          {/* Join Existing Competition */}
-          <Card className="relative overflow-hidden border-2 border-green-200 hover:border-green-300 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-teal-500/5" />
-            <CardHeader className="relative">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Users className="h-6 w-6 text-green-600" />
+                      {/* Join Existing Competition */}
+            <Card className="border-0 shadow-md hover:shadow-lg transition-all duration-200 bg-white">
+              <CardHeader className="pb-4">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-emerald-50 rounded-xl">
+                    <Users className="h-7 w-7 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-gray-900">Join Existing Competition</CardTitle>
+                    <CardDescription className="text-gray-500">Enter your competition code to join the action</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-xl">Join Existing Competition</CardTitle>
-                  <CardDescription>Enter your competition code to join the action</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <Label htmlFor="join-code" className="text-sm font-medium text-gray-700">Competition Code</Label>
+                  <Input 
+                    id="join-code"
+                    placeholder="Enter 6-character code"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    className="border-gray-200 focus:border-emerald-500 focus:ring-emerald-500 uppercase"
+                    maxLength={6}
+                  />
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="relative space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="join-code">Competition Code</Label>
-                <Input 
-                  id="join-code"
-                  placeholder="Enter 6-character code"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  className="border-green-200 focus:border-green-400 uppercase"
-                  maxLength={6}
-                />
-              </div>
-              <Button 
-                onClick={handleJoinCompetition}
-                className="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white"
-                disabled={joinCode.length !== 6 || loading}
-              >
-                {loading ? "Joining..." : "Join Competition"}
-              </Button>
-            </CardContent>
-          </Card>
+                <Button 
+                  onClick={handleJoinCompetition}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white border-0 h-11"
+                  disabled={loading}
+                >
+                  {loading ? "Joining..." : "Join Competition"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Features Preview */}
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">
             Everything you need for epic team competitions
           </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="h-6 w-6 text-blue-600" />
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="text-center p-8 bg-white rounded-2xl shadow-md border border-gray-100/50">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Users className="h-8 w-8 text-blue-600" />
               </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Team Drafting</h3>
-              <p className="text-sm text-gray-600">Interactive coin flip and drag-and-drop team selection</p>
+              <h3 className="font-semibold text-gray-900 mb-3 text-lg">Team Drafting</h3>
+              <p className="text-gray-600 leading-relaxed">Interactive coin flip and drag-and-drop team selection</p>
             </div>
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Zap className="h-6 w-6 text-purple-600" />
+            <div className="text-center p-8 bg-white rounded-2xl shadow-md border border-gray-100/50">
+              <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Zap className="h-8 w-8 text-purple-600" />
               </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Live Scoring</h3>
-              <p className="text-sm text-gray-600">Real-time score tracking for team and individual competitions</p>
+              <h3 className="font-semibold text-gray-900 mb-3 text-lg">Live Scoring</h3>
+              <p className="text-gray-600 leading-relaxed">Real-time score tracking for team and individual competitions</p>
             </div>
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trophy className="h-6 w-6 text-yellow-600" />
+            <div className="text-center p-8 bg-white rounded-2xl shadow-md border border-gray-100/50">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <Trophy className="h-8 w-8 text-amber-600" />
               </div>
-              <h3 className="font-semibold text-gray-800 mb-2">Competition Dashboard</h3>
-              <p className="text-sm text-gray-600">Beautiful overview of teams, scores, and achievements</p>
+              <h3 className="font-semibold text-gray-900 mb-3 text-lg">Competition Dashboard</h3>
+              <p className="text-gray-600 leading-relaxed">Beautiful overview of teams, scores, and achievements</p>
             </div>
           </div>
         </div>
