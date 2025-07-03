@@ -139,9 +139,9 @@ const Index = () => {
           {/* Competition Illustration */}
           <div className="flex justify-center lg:justify-end">
             <div className="relative">
-              {/* Original landing page image from GitHub Releases */}
+              {/* Landing page image from public directory */}
               <img 
-                src="https://github.com/mushfiqur124/boast/releases/download/v1.0.0/landing-page-image.png" 
+                src="/landing-page-image.png" 
                 alt="Competition trophy and podium illustration"
                 className="w-64 md:w-80 lg:w-96 h-auto hover:scale-105 transition-transform duration-300 drop-shadow-lg"
                 loading="lazy"
