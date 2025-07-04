@@ -531,13 +531,13 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
                           <div className="flex justify-center items-end space-x-4">
                             {/* Second Place */}
                             {results[1] && (
-                              <div className="text-center">
-                                <div className="bg-gray-300 h-20 w-24 rounded-t-lg flex items-end justify-center pb-2">
+                              <div className="text-center w-28">
+                                <div className="bg-gray-300 h-20 w-28 rounded-t-lg flex items-end justify-center pb-2">
                                   <span className="text-2xl">🥈</span>
                                 </div>
-                                <div className="bg-gray-100 p-3 rounded-b-lg">
-                                  <p className="font-bold text-sm">{results[1].participant_name}</p>
-                                  <p className="text-xs text-gray-600">{results[1].team_name}</p>
+                                <div className="bg-gray-100 p-3 rounded-b-lg w-28">
+                                  <p className="font-bold text-sm truncate" title={results[1].participant_name}>{results[1].participant_name}</p>
+                                  <p className="text-xs text-gray-600 truncate" title={results[1].team_name}>{results[1].team_name}</p>
                                   <p className="text-lg font-bold text-gray-700">{results[1].score}</p>
                                 </div>
                               </div>
@@ -545,13 +545,13 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
 
                             {/* First Place */}
                             {results[0] && (
-                              <div className="text-center">
-                                <div className="bg-yellow-400 h-28 w-24 rounded-t-lg flex items-end justify-center pb-2">
+                              <div className="text-center w-28">
+                                <div className="bg-yellow-400 h-28 w-28 rounded-t-lg flex items-end justify-center pb-2">
                                   <span className="text-3xl">🥇</span>
                                 </div>
-                                <div className="bg-yellow-100 p-3 rounded-b-lg">
-                                  <p className="font-bold text-sm">{results[0].participant_name}</p>
-                                  <p className="text-xs text-gray-600">{results[0].team_name}</p>
+                                <div className="bg-yellow-100 p-3 rounded-b-lg w-28">
+                                  <p className="font-bold text-sm truncate" title={results[0].participant_name}>{results[0].participant_name}</p>
+                                  <p className="text-xs text-gray-600 truncate" title={results[0].team_name}>{results[0].team_name}</p>
                                   <p className="text-lg font-bold text-yellow-700">{results[0].score}</p>
                                 </div>
                               </div>
@@ -559,13 +559,13 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
 
                             {/* Third Place */}
                             {results[2] && (
-                              <div className="text-center">
-                                <div className="bg-orange-400 h-16 w-24 rounded-t-lg flex items-end justify-center pb-2">
+                              <div className="text-center w-28">
+                                <div className="bg-orange-400 h-16 w-28 rounded-t-lg flex items-end justify-center pb-2">
                                   <span className="text-xl">🥉</span>
                                 </div>
-                                <div className="bg-orange-100 p-3 rounded-b-lg">
-                                  <p className="font-bold text-sm">{results[2].participant_name}</p>
-                                  <p className="text-xs text-gray-600">{results[2].team_name}</p>
+                                <div className="bg-orange-100 p-3 rounded-b-lg w-28">
+                                  <p className="font-bold text-sm truncate" title={results[2].participant_name}>{results[2].participant_name}</p>
+                                  <p className="text-xs text-gray-600 truncate" title={results[2].team_name}>{results[2].team_name}</p>
                                   <p className="text-lg font-bold text-orange-700">{results[2].score}</p>
                                 </div>
                               </div>

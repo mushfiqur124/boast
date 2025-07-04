@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trophy, Users, Edit } from "lucide-react";
+import { Plus, Trophy, Users, Edit, Trash2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import ScoreEntry from './ScoreEntry';
@@ -36,6 +36,8 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
   const [isAddingActivity, setIsAddingActivity] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletingActivity, setDeletingActivity] = useState<Activity | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadActivities();
@@ -142,6 +144,82 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
         description: "Failed to add activity",
         variant: "destructive",
       });
+    }
+  };
+
+  const deleteActivity = async (activity: Activity) => {
+    if (!activity) return;
+    
+    setIsDeleting(true);
+    try {
+      // First, get all scores for this activity to calculate team point adjustments
+      const { data: scoresData, error: scoresError } = await supabase
+        .from('scores')
+        .select('team_id, points_earned')
+        .eq('activity_id', activity.id)
+        .eq('score_type', 'team')
+        .not('team_id', 'is', null);
+
+      if (scoresError) throw scoresError;
+
+      // Calculate how much to subtract from each team's total
+      const teamAdjustments: Record<string, number> = {};
+      scoresData?.forEach(score => {
+        if (score.team_id && score.points_earned) {
+          teamAdjustments[score.team_id] = (teamAdjustments[score.team_id] || 0) + score.points_earned;
+        }
+      });
+
+      // Update team totals (subtract the points from this activity)
+      for (const [teamId, pointsToSubtract] of Object.entries(teamAdjustments)) {
+        const { data: teamData, error: teamFetchError } = await supabase
+          .from('teams')
+          .select('total_score')
+          .eq('id', teamId)
+          .single();
+
+        if (teamFetchError) continue;
+
+        await supabase
+          .from('teams')
+          .update({ total_score: teamData.total_score - pointsToSubtract })
+          .eq('id', teamId);
+      }
+
+      // Delete all scores for this activity
+      const { error: deleteScoresError } = await supabase
+        .from('scores')
+        .delete()
+        .eq('activity_id', activity.id);
+
+      if (deleteScoresError) throw deleteScoresError;
+
+      // Delete the activity itself
+      const { error: deleteActivityError } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', activity.id);
+
+      if (deleteActivityError) throw deleteActivityError;
+
+      // Update local state
+      setActivities(activities.filter(a => a.id !== activity.id));
+      setDeletingActivity(null);
+
+      toast({
+        title: "Activity Deleted",
+        description: `${activity.name} has been removed from the competition`,
+      });
+
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete activity. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -303,6 +381,14 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
                       <Edit className="h-3 w-3 mr-1" />
                       {activity.completed ? 'Edit Scores' : 'Enter Scores'}
                     </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setDeletingActivity(activity)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -321,6 +407,43 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
           onScoresUpdated={loadActivities}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingActivity} onOpenChange={() => setDeletingActivity(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+              Delete Activity?
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{deletingActivity?.name}"? This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Remove all scores for this activity</li>
+                <li>Subtract earned points from team totals</li>
+                <li>Permanently delete the activity</li>
+              </ul>
+              <span className="font-medium text-red-600 mt-2 block">This action cannot be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setDeletingActivity(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => deletingActivity && deleteActivity(deletingActivity)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Yes, Delete Activity"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
