@@ -48,11 +48,25 @@ interface IndividualResult {
   rank: number;
 }
 
+interface MVPResult {
+  participant_id: string;
+  participant_name: string;
+  team_name: string;
+  team_id: string;
+  average_rank: number;
+  activity_ranks: Array<{
+    activity_name: string;
+    rank: number;
+    score: number;
+  }>;
+}
+
 const CompetitionResults = ({ competitionCode, competitionId }: { competitionCode: string, competitionId: string }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityWinners, setActivityWinners] = useState<ActivityWinner[]>([]);
   const [individualResults, setIndividualResults] = useState<Record<string, IndividualResult[]>>({});
+  const [mvpResult, setMvpResult] = useState<MVPResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [showWinner, setShowWinner] = useState(false);
   const [drumRolling, setDrumRolling] = useState(true);
@@ -239,6 +253,72 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
     }
 
     setIndividualResults(results);
+    
+    // Calculate MVP after loading individual results
+    calculateMVP(results, activities);
+  };
+
+  const calculateMVP = (individualResults: Record<string, IndividualResult[]>, activities: Activity[]) => {
+    // Get only individual activities that have results
+    const individualActivities = activities.filter(a => a.type === 'individual' && individualResults[a.id]);
+    
+    if (individualActivities.length === 0) {
+      setMvpResult(null);
+      return;
+    }
+
+    // Create a map to track each participant's ranks across activities
+    const participantRanks: Record<string, {
+      participant_name: string;
+      team_name: string;
+      team_id: string;
+      ranks: Array<{ activity_name: string; rank: number; score: number; }>;
+    }> = {};
+
+    // Collect ranks for each participant across all individual activities
+    individualActivities.forEach(activity => {
+      const results = individualResults[activity.id] || [];
+      results.forEach(result => {
+        if (!participantRanks[result.participant_id]) {
+          participantRanks[result.participant_id] = {
+            participant_name: result.participant_name,
+            team_name: result.team_name,
+            team_id: result.team_id,
+            ranks: []
+          };
+        }
+        participantRanks[result.participant_id].ranks.push({
+          activity_name: activity.name,
+          rank: result.rank,
+          score: result.score
+        });
+      });
+    });
+
+    // Calculate MVP (participant with lowest average rank, but only if they participated in all activities)
+    let mvp: MVPResult | null = null;
+    let bestAverageRank = Infinity;
+
+    Object.entries(participantRanks).forEach(([participantId, data]) => {
+      // Only consider participants who participated in all individual activities
+      if (data.ranks.length === individualActivities.length) {
+        const averageRank = data.ranks.reduce((sum, r) => sum + r.rank, 0) / data.ranks.length;
+        
+        if (averageRank < bestAverageRank) {
+          bestAverageRank = averageRank;
+          mvp = {
+            participant_id: participantId,
+            participant_name: data.participant_name,
+            team_name: data.team_name,
+            team_id: data.team_id,
+            average_rank: averageRank,
+            activity_ranks: data.ranks
+          };
+        }
+      }
+    });
+
+    setMvpResult(mvp);
   };
 
   const winningTeam = teams[0];
@@ -294,6 +374,57 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
 
         {showWinner && (
           <>
+            {/* MVP Section */}
+            {mvpResult && (
+              <Card className="border-purple-200 bg-purple-50">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-center flex items-center justify-center">
+                    <Star className="h-8 w-8 mr-3 text-purple-500" />
+                    Most Valuable Player (MVP)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center space-y-4">
+                    <div className="text-center space-y-2">
+                      <h3 className="text-2xl font-bold text-purple-800">{mvpResult.participant_name}</h3>
+                      <p className="text-lg text-purple-600">{mvpResult.team_name}</p>
+                      <p className="text-sm text-gray-600">
+                        Average Rank: {mvpResult.average_rank.toFixed(2)}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg p-4 border border-purple-200">
+                      <h4 className="font-semibold mb-3 text-purple-800">Individual Activity Performance</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {mvpResult.activity_ranks.map((activity, index) => (
+                          <div key={index} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{activity.activity_name}</p>
+                              <p className="text-xs text-gray-600">Score: {activity.score}</p>
+                            </div>
+                            <Badge 
+                              variant="outline" 
+                              className={`ml-2 ${
+                                activity.rank === 1 ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                                activity.rank === 2 ? 'bg-gray-100 text-gray-800 border-gray-300' :
+                                activity.rank === 3 ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                                'bg-blue-100 text-blue-800 border-blue-300'
+                              }`}
+                            >
+                              #{activity.rank}
+                              {activity.rank === 1 && ' 🥇'}
+                              {activity.rank === 2 && ' 🥈'}
+                              {activity.rank === 3 && ' 🥉'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Team Standings */}
             <Card className="border-yellow-200 bg-yellow-50">
               <CardHeader>

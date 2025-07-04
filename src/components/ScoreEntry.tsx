@@ -213,25 +213,53 @@ const ScoreEntry = ({
       s.participants.map(p => ({ ...p, team_id: s.team_id, team_name: s.team_name }))
     ).sort((a, b) => b.score - a.score);
 
+    // Create proper tie-aware rankings
+    const participantRankings = [];
+    let currentRank = 1;
+    
+    for (let i = 0; i < allParticipantScores.length; i++) {
+      const participant = allParticipantScores[i];
+      
+      // If this isn't the first participant and their score is different from the previous one,
+      // update the rank to account for ties
+      if (i > 0 && allParticipantScores[i - 1].score !== participant.score) {
+        currentRank = i + 1;
+      }
+      
+      participantRankings.push({
+        ...participant,
+        rank: currentRank
+      });
+    }
+
     summaries.forEach(summary => {
       const individualBonuses: { participant: string; bonus: number; reason: string }[] = [];
       
       summary.participants.forEach(participant => {
-        const globalRank = allParticipantScores.findIndex(p => p.id === participant.id);
+        const participantRanking = participantRankings.find(p => p.id === participant.id);
         
-        if (globalRank === 0 && allParticipantScores.length > 1) {
+        if (!participantRanking) return;
+        
+        const rank = participantRanking.rank;
+        const totalParticipants = allParticipantScores.length;
+        
+        // Award bonuses based on rank, ensuring ties get the same bonus
+        if (rank === 1 && totalParticipants > 1) {
+          // First place bonus
           individualBonuses.push({
             participant: participant.name,
             bonus: scoringRules.firstPlace,
             reason: "1st Place Overall"
           });
-        } else if (globalRank === 1 && allParticipantScores.length > 2) {
+        } else if (rank === 2 && totalParticipants > 2) {
+          // Second place bonus (only if there are more than 2 participants)
           individualBonuses.push({
             participant: participant.name,
             bonus: scoringRules.secondPlace,
             reason: "2nd Place Overall"
           });
-        } else if (globalRank === allParticipantScores.length - 1 && allParticipantScores.length > 2) {
+        } else if (rank === totalParticipants && totalParticipants > 2) {
+          // Last place penalty (only if there are more than 2 participants)
           individualBonuses.push({
             participant: participant.name,
             bonus: scoringRules.lastPlace,
