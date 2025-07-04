@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Share2, Trophy, AlertCircle } from "lucide-react";
+import { Copy, Share2, Trophy, AlertCircle, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +53,15 @@ const Competition = () => {
     toast({
       title: "Code copied!",
       description: "Competition code copied to clipboard",
+    });
+  };
+
+  const shareViewOnlyUrl = () => {
+    const viewUrl = `${window.location.origin}/view/${code}`;
+    navigator.clipboard.writeText(viewUrl);
+    toast({
+      title: "View link copied!",
+      description: "View-only link copied to clipboard",
     });
   };
 
@@ -171,9 +180,9 @@ const Competition = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm" onClick={copyCodeToClipboard}>
-                <Share2 className="h-4 w-4 mr-2" />
-                Share Code
+              <Button variant="outline" size="sm" onClick={shareViewOnlyUrl}>
+                <Eye className="h-4 w-4 mr-2" />
+                Share View
               </Button>
               <Button 
                 variant="destructive" 

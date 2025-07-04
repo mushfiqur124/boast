@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Users, Target, Star } from "lucide-react";
+import { Trophy, Users, Target, Star, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Team {
@@ -126,6 +126,10 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
     ));
   };
 
+  const getTeamMembers = (teamId: string) => {
+    return participants.filter(p => p.team_id === teamId);
+  };
+
   const completedActivities = activities.filter(a => a.completed).length;
   const totalActivities = activities.length;
 
@@ -199,22 +203,36 @@ const Dashboard = ({ competitionCode, competitionId }: { competitionCode: string
             {teams.length === 0 ? (
               <p className="text-center text-gray-500 py-4">No teams registered yet</p>
             ) : (
-              teams.map((team, index) => (
-                <div key={team.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-semibold">
-                      #{index + 1}
+              teams.map((team, index) => {
+                const teamMembers = getTeamMembers(team.id);
+                return (
+                  <div key={team.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-semibold">
+                        #{index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">{team.name}</h3>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {teamMembers.map(member => (
+                            <Badge 
+                              key={member.id}
+                              variant={member.name === team.captain ? "default" : "secondary"}
+                              className={`text-xs ${member.name === team.captain ? "bg-yellow-500 hover:bg-yellow-600" : ""}`}
+                            >
+                              {member.name === team.captain && <Crown className="h-3 w-3 mr-1" />}
+                              {member.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{team.name}</h3>
-                      <p className="text-sm text-gray-600">Captain: {team.captain}</p>
-                    </div>
+                    <Badge variant="outline" className="text-lg font-bold">
+                      {team.total_score} pts
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="text-lg font-bold">
-                    {team.total_score} pts
-                  </Badge>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </CardContent>
