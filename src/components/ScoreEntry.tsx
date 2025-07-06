@@ -295,12 +295,18 @@ const ScoreEntry = ({
             bonus: scoringRules.secondPlace,
             reason: "2nd Place Overall"
           });
-        } else if (rank === totalParticipants && totalParticipants > 2) {
+        }
+        
+        // Check if this is the last effective placement (handles ties for last place properly)
+        const lastEffectivePlacement = Math.max(...Array.from(scoreToEffectivePlacement.values()));
+        if (effectivePlacement === lastEffectivePlacement && totalParticipants > 2) {
           // Last place penalty (only if there are more than 2 participants)
           individualBonuses.push({
             participant: participant.name,
             bonus: scoringRules.lastPlace,
-            reason: "Last Place Overall"
+            reason: allParticipantScores.filter(p => p.score === participantRanking.score).length > 1 
+              ? "Last Place Overall (Tied)" 
+              : "Last Place Overall"
           });
         }
       });
@@ -680,8 +686,27 @@ const ScoreEntry = ({
                     );
                   }
 
-                  const topThree = allParticipantsWithScores.slice(0, 3);
-                  const restOfParticipants = allParticipantsWithScores.slice(3);
+                  // Add proper tie-aware ranking
+                  const participantsWithRanks = [];
+                  let currentRank = 1;
+                  for (let i = 0; i < allParticipantsWithScores.length; i++) {
+                    const participant = allParticipantsWithScores[i];
+                    
+                    // If this isn't the first participant and their score is different from the previous one,
+                    // update the rank to account for ties
+                    if (i > 0 && allParticipantsWithScores[i - 1].score !== participant.score) {
+                      currentRank = i + 1;
+                    }
+                    
+                    participantsWithRanks.push({
+                      ...participant,
+                      displayRank: currentRank
+                    });
+                  }
+
+                  // Separate podium (rank 1-3) from others
+                  const podiumParticipants = participantsWithRanks.filter(p => p.displayRank <= 3);
+                  const restOfParticipants = participantsWithRanks.filter(p => p.displayRank > 3);
 
                   return (
                     <div className="space-y-4">
@@ -694,42 +719,39 @@ const ScoreEntry = ({
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="flex items-end justify-center space-x-4 mb-4">
-                            {/* 2nd Place */}
-                            {topThree[1] && (
-                              <div className="text-center transform hover:scale-105 transition-transform w-20">
-                                <div className="w-16 h-12 bg-gradient-to-t from-gray-300 to-gray-200 rounded-t-lg flex items-center justify-center mb-2 border-2 border-gray-400 mx-auto">
-                                  <span className="text-white font-bold text-lg">2</span>
-                                </div>
-                                <div className="w-20 text-xs font-medium truncate" title={topThree[1].name}>{topThree[1].name}</div>
-                                <div className="text-xs text-gray-600">{topThree[1].score} {activity.unit}</div>
-                                <div className="text-xs text-blue-600 truncate" title={topThree[1].team_name}>({topThree[1].team_name})</div>
-                              </div>
-                            )}
+                          <div className="flex items-end justify-center space-x-2 mb-4 flex-wrap">
+                            {/* Group participants by rank for proper tie display */}
+                            {[1, 2, 3].map(rank => {
+                              const playersAtRank = podiumParticipants.filter(p => p.displayRank === rank);
+                              if (playersAtRank.length === 0) return null;
 
-                            {/* 1st Place */}
-                            {topThree[0] && (
-                              <div className="text-center transform hover:scale-105 transition-transform w-20">
-                                <div className="w-16 h-16 bg-gradient-to-t from-yellow-400 to-yellow-300 rounded-t-lg flex items-center justify-center mb-2 border-2 border-yellow-500 shadow-lg mx-auto">
-                                  <span className="text-white font-bold text-xl">1</span>
+                              return playersAtRank.map((participant, index) => (
+                                <div key={participant.id} className="text-center transform hover:scale-105 transition-transform w-20 mb-2">
+                                  <div className={`w-16 flex items-center justify-center mb-2 border-2 mx-auto rounded-t-lg ${
+                                    rank === 1 ? 'h-16 bg-gradient-to-t from-yellow-400 to-yellow-300 border-yellow-500 shadow-lg' :
+                                    rank === 2 ? 'h-12 bg-gradient-to-t from-gray-300 to-gray-200 border-gray-400' :
+                                    'h-10 bg-gradient-to-t from-amber-600 to-amber-500 border-amber-700'
+                                  }`}>
+                                    <span className={`text-white font-bold ${rank === 1 ? 'text-xl' : rank === 2 ? 'text-lg' : 'text-base'}`}>
+                                      {rank}
+                                    </span>
+                                  </div>
+                                  <div className={`w-20 font-medium truncate ${
+                                    rank === 1 ? 'text-sm font-bold text-yellow-700' : 'text-xs'
+                                  }`} title={participant.name}>
+                                    {participant.name}
+                                  </div>
+                                  <div className={`text-gray-600 ${
+                                    rank === 1 ? 'text-sm font-medium text-yellow-600' : 'text-xs'
+                                  }`}>
+                                    {participant.score} {activity.unit}
+                                  </div>
+                                  <div className="text-xs text-blue-600 truncate" title={participant.team_name}>
+                                    ({participant.team_name})
+                                  </div>
                                 </div>
-                                <div className="w-20 text-sm font-bold text-yellow-700 truncate" title={topThree[0].name}>{topThree[0].name}</div>
-                                <div className="text-sm font-medium text-yellow-600">{topThree[0].score} {activity.unit}</div>
-                                <div className="text-xs text-blue-600 truncate" title={topThree[0].team_name}>({topThree[0].team_name})</div>
-                              </div>
-                            )}
-
-                            {/* 3rd Place */}
-                            {topThree[2] && (
-                              <div className="text-center transform hover:scale-105 transition-transform w-20">
-                                <div className="w-16 h-10 bg-gradient-to-t from-amber-600 to-amber-500 rounded-t-lg flex items-center justify-center mb-2 border-2 border-amber-700 mx-auto">
-                                  <span className="text-white font-bold">3</span>
-                                </div>
-                                <div className="w-20 text-xs font-medium truncate" title={topThree[2].name}>{topThree[2].name}</div>
-                                <div className="text-xs text-gray-600">{topThree[2].score} {activity.unit}</div>
-                                <div className="text-xs text-blue-600 truncate" title={topThree[2].team_name}>({topThree[2].team_name})</div>
-                              </div>
-                            )}
+                              ));
+                            })}
                           </div>
                         </CardContent>
                       </Card>
@@ -742,11 +764,11 @@ const ScoreEntry = ({
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-2">
-                              {restOfParticipants.map((participant, index) => (
+                              {restOfParticipants.map((participant) => (
                                 <div key={participant.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                                   <div className="flex items-center space-x-3">
                                     <span className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                                      {index + 4}
+                                      {participant.displayRank}
                                     </span>
                                     <div>
                                       <div className="text-sm font-medium">{participant.name}</div>

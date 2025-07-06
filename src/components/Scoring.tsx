@@ -200,8 +200,12 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
                 bonusPoints = newRules.firstPlace; // First place (handles ties)
               } else if (effectivePlacement === 2 && totalParticipants > 2) {
                 bonusPoints = newRules.secondPlace; // Second place (effectively second even if rank is 3 due to tie)
-              } else if (i === sortedBonusScores.length - 1 && totalParticipants > 2) {
-                bonusPoints = newRules.lastPlace; // Last place
+              }
+              
+              // Check if this is the last effective placement (handles ties for last place properly)
+              const lastEffectivePlacement = Math.max(...Array.from(scoreToEffectivePlacement.values()));
+              if (effectivePlacement === lastEffectivePlacement && totalParticipants > 2) {
+                bonusPoints = newRules.lastPlace; // Last place (can be in addition to other bonuses)
               }
 
               const { error: updateError } = await supabase

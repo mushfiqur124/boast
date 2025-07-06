@@ -243,11 +243,21 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
         };
       }) || [];
 
-      // Sort by score (descending) and assign ranks
+      // Sort by score (descending) and assign proper tie-aware ranks
       participantScores.sort((a, b) => b.score - a.score);
-      participantScores.forEach((result, index) => {
-        result.rank = index + 1;
-      });
+      
+      let currentRank = 1;
+      for (let i = 0; i < participantScores.length; i++) {
+        const result = participantScores[i];
+        
+        // If this isn't the first participant and their score is different from the previous one,
+        // update the rank to account for ties
+        if (i > 0 && participantScores[i - 1].score !== result.score) {
+          currentRank = i + 1;
+        }
+        
+        result.rank = currentRank;
+      }
 
       results[activity.id] = participantScores;
     }
@@ -528,56 +538,57 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
                       return (
                         <div key={activityId} className="space-y-4">
                           <h3 className="text-xl font-bold text-center">{activity.name} Podium</h3>
-                          <div className="flex justify-center items-end space-x-4">
-                            {/* Second Place */}
-                            {results[1] && (
-                              <div className="text-center w-28">
-                                <div className="bg-gray-300 h-20 w-28 rounded-t-lg flex items-end justify-center pb-2">
-                                  <span className="text-2xl">🥈</span>
-                                </div>
-                                <div className="bg-gray-100 p-3 rounded-b-lg w-28">
-                                  <p className="font-bold text-sm truncate" title={results[1].participant_name}>{results[1].participant_name}</p>
-                                  <p className="text-xs text-gray-600 truncate" title={results[1].team_name}>{results[1].team_name}</p>
-                                  <p className="text-lg font-bold text-gray-700">{results[1].score}</p>
-                                </div>
-                              </div>
-                            )}
+                          <div className="flex justify-center items-end space-x-2 flex-wrap">
+                            {/* Group participants by rank for proper tie display */}
+                            {[1, 2, 3].map(rank => {
+                              const playersAtRank = results.filter(r => r.rank === rank);
+                              if (playersAtRank.length === 0) return null;
 
-                            {/* First Place */}
-                            {results[0] && (
-                              <div className="text-center w-28">
-                                <div className="bg-yellow-400 h-28 w-28 rounded-t-lg flex items-end justify-center pb-2">
-                                  <span className="text-3xl">🥇</span>
+                              return playersAtRank.map((result) => (
+                                <div key={result.participant_id} className="text-center w-28 mb-2">
+                                  <div className={`w-28 rounded-t-lg flex items-end justify-center pb-2 ${
+                                    rank === 1 ? 'bg-yellow-400 h-28' :
+                                    rank === 2 ? 'bg-gray-300 h-20' :
+                                    'bg-orange-400 h-16'
+                                  }`}>
+                                    <span className={`${
+                                      rank === 1 ? 'text-3xl' :
+                                      rank === 2 ? 'text-2xl' :
+                                      'text-xl'
+                                    }`}>
+                                      {rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}
+                                    </span>
+                                  </div>
+                                  <div className={`p-3 rounded-b-lg w-28 ${
+                                    rank === 1 ? 'bg-yellow-100' :
+                                    rank === 2 ? 'bg-gray-100' :
+                                    'bg-orange-100'
+                                  }`}>
+                                    <p className="font-bold text-sm truncate" title={result.participant_name}>
+                                      {result.participant_name}
+                                    </p>
+                                    <p className="text-xs text-gray-600 truncate" title={result.team_name}>
+                                      {result.team_name}
+                                    </p>
+                                    <p className={`text-lg font-bold ${
+                                      rank === 1 ? 'text-yellow-700' :
+                                      rank === 2 ? 'text-gray-700' :
+                                      'text-orange-700'
+                                    }`}>
+                                      {result.score}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="bg-yellow-100 p-3 rounded-b-lg w-28">
-                                  <p className="font-bold text-sm truncate" title={results[0].participant_name}>{results[0].participant_name}</p>
-                                  <p className="text-xs text-gray-600 truncate" title={results[0].team_name}>{results[0].team_name}</p>
-                                  <p className="text-lg font-bold text-yellow-700">{results[0].score}</p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Third Place */}
-                            {results[2] && (
-                              <div className="text-center w-28">
-                                <div className="bg-orange-400 h-16 w-28 rounded-t-lg flex items-end justify-center pb-2">
-                                  <span className="text-xl">🥉</span>
-                                </div>
-                                <div className="bg-orange-100 p-3 rounded-b-lg w-28">
-                                  <p className="font-bold text-sm truncate" title={results[2].participant_name}>{results[2].participant_name}</p>
-                                  <p className="text-xs text-gray-600 truncate" title={results[2].team_name}>{results[2].team_name}</p>
-                                  <p className="text-lg font-bold text-orange-700">{results[2].score}</p>
-                                </div>
-                              </div>
-                            )}
+                              ));
+                            })}
                           </div>
 
                           {/* Additional participants */}
-                          {results.length > 3 && (
+                          {results.filter(r => r.rank > 3).length > 0 && (
                             <div className="mt-4">
                               <h4 className="font-semibold mb-2 text-center">All Participants</h4>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {results.slice(3).map(result => (
+                                {results.filter(r => r.rank > 3).map(result => (
                                   <div key={result.participant_id} className="text-center p-2 bg-gray-50 rounded">
                                     <p className="font-medium text-sm">{result.rank}. {result.participant_name}</p>
                                     <p className="text-xs text-gray-600">{result.team_name}</p>
