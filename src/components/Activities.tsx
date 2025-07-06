@@ -43,6 +43,43 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
     loadActivities();
   }, [competitionId]);
 
+  // Helper function to recalculate all team totals from scratch
+  const recalculateAllTeamTotals = async () => {
+    try {
+      // Get all teams for this competition
+      const { data: teams, error: teamsError } = await supabase
+        .from('teams')
+        .select('id, name')
+        .eq('competition_id', competitionId);
+
+      if (teamsError) throw teamsError;
+
+      if (teams) {
+        for (const team of teams) {
+          // Calculate total score for this team from all remaining scores
+          const { data: teamScores, error: scoresError } = await supabase
+            .from('scores')
+            .select('points_earned')
+            .eq('team_id', team.id);
+
+          if (scoresError) throw scoresError;
+
+          const totalScore = teamScores?.reduce((sum, score) => sum + score.points_earned, 0) || 0;
+
+          // Update team total
+          const { error: updateError } = await supabase
+            .from('teams')
+            .update({ total_score: totalScore })
+            .eq('id', team.id);
+
+          if (updateError) throw updateError;
+        }
+      }
+    } catch (error) {
+      console.error('Error recalculating team totals:', error);
+    }
+  };
+
   const loadActivities = async () => {
     try {
       const { data, error } = await supabase
@@ -53,6 +90,9 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
       if (error) throw error;
 
       setActivities(data || []);
+      
+      // Ensure team totals are accurate on load (silent recalculation)
+      await recalculateAllTeamTotals();
     } catch (error) {
       console.error('Error loading activities:', error);
       toast({
@@ -152,40 +192,6 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
     
     setIsDeleting(true);
     try {
-      // First, get all scores for this activity to calculate team point adjustments
-      const { data: scoresData, error: scoresError } = await supabase
-        .from('scores')
-        .select('team_id, points_earned')
-        .eq('activity_id', activity.id)
-        .eq('score_type', 'team')
-        .not('team_id', 'is', null);
-
-      if (scoresError) throw scoresError;
-
-      // Calculate how much to subtract from each team's total
-      const teamAdjustments: Record<string, number> = {};
-      scoresData?.forEach(score => {
-        if (score.team_id && score.points_earned) {
-          teamAdjustments[score.team_id] = (teamAdjustments[score.team_id] || 0) + score.points_earned;
-        }
-      });
-
-      // Update team totals (subtract the points from this activity)
-      for (const [teamId, pointsToSubtract] of Object.entries(teamAdjustments)) {
-        const { data: teamData, error: teamFetchError } = await supabase
-          .from('teams')
-          .select('total_score')
-          .eq('id', teamId)
-          .single();
-
-        if (teamFetchError) continue;
-
-        await supabase
-          .from('teams')
-          .update({ total_score: teamData.total_score - pointsToSubtract })
-          .eq('id', teamId);
-      }
-
       // Delete all scores for this activity
       const { error: deleteScoresError } = await supabase
         .from('scores')
@@ -202,13 +208,16 @@ const Activities = ({ competitionCode, competitionId }: { competitionCode: strin
 
       if (deleteActivityError) throw deleteActivityError;
 
+      // Recalculate all team totals from scratch
+      await recalculateAllTeamTotals();
+
       // Update local state
       setActivities(activities.filter(a => a.id !== activity.id));
       setDeletingActivity(null);
 
       toast({
         title: "Activity Deleted",
-        description: `${activity.name} has been removed from the competition`,
+        description: `${activity.name} has been removed and team totals recalculated`,
       });
 
     } catch (error) {
