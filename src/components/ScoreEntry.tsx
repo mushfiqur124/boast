@@ -236,7 +236,7 @@ const ScoreEntry = ({
       s.participants.map(p => ({ ...p, team_id: s.team_id, team_name: s.team_name }))
     ).sort((a, b) => b.score - a.score);
 
-    // Create proper tie-aware rankings
+    // Create proper tie-aware rankings using dense ranking (1, 1, 2, 3...)
     const participantRankings = [];
     let currentRank = 1;
     
@@ -244,9 +244,9 @@ const ScoreEntry = ({
       const participant = allParticipantScores[i];
       
       // If this isn't the first participant and their score is different from the previous one,
-      // update the rank to account for ties
+      // increment rank by 1 (dense ranking)
       if (i > 0 && allParticipantScores[i - 1].score !== participant.score) {
-        currentRank = i + 1;
+        currentRank++;
       }
       
       participantRankings.push({
@@ -255,15 +255,14 @@ const ScoreEntry = ({
       });
     }
 
-    // Count how many participants have each unique score to determine effective placements
+    // Count how many participants have each unique score to determine effective placements using dense ranking
     const uniqueScores = [...new Set(allParticipantScores.map(p => p.score))].sort((a, b) => b - a);
     const scoreToEffectivePlacement = new Map();
     let currentPlacement = 1;
     
     uniqueScores.forEach(score => {
       scoreToEffectivePlacement.set(score, currentPlacement);
-      const participantsWithThisScore = allParticipantScores.filter(p => p.score === score).length;
-      currentPlacement += participantsWithThisScore;
+      currentPlacement++; // Dense ranking: increment by 1 for each unique score
     });
 
     summaries.forEach(summary => {
@@ -686,16 +685,16 @@ const ScoreEntry = ({
                     );
                   }
 
-                  // Add proper tie-aware ranking
+                  // Add proper tie-aware ranking using dense ranking (1, 1, 2, 3...)
                   const participantsWithRanks = [];
                   let currentRank = 1;
                   for (let i = 0; i < allParticipantsWithScores.length; i++) {
                     const participant = allParticipantsWithScores[i];
                     
                     // If this isn't the first participant and their score is different from the previous one,
-                    // update the rank to account for ties
+                    // increment rank by 1 (dense ranking)
                     if (i > 0 && allParticipantsWithScores[i - 1].score !== participant.score) {
-                      currentRank = i + 1;
+                      currentRank++;
                     }
                     
                     participantsWithRanks.push({

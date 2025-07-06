@@ -243,7 +243,7 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
         };
       }) || [];
 
-      // Sort by score (descending) and assign proper tie-aware ranks
+      // Sort by score (descending) and assign proper tie-aware ranks using dense ranking (1, 1, 2, 3...)
       participantScores.sort((a, b) => b.score - a.score);
       
       let currentRank = 1;
@@ -251,9 +251,9 @@ const CompetitionResults = ({ competitionCode, competitionId }: { competitionCod
         const result = participantScores[i];
         
         // If this isn't the first participant and their score is different from the previous one,
-        // update the rank to account for ties
+        // increment rank by 1 (dense ranking)
         if (i > 0 && participantScores[i - 1].score !== result.score) {
-          currentRank = i + 1;
+          currentRank++;
         }
         
         result.rank = currentRank;

@@ -178,15 +178,14 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
               return bScore - aScore; // Higher scores first
             });
 
-            // Calculate effective placements to handle ties properly
+            // Calculate effective placements to handle ties properly using dense ranking
             const uniqueScores = [...new Set(sortedBonusScores.map(s => parseFloat(String(s.value || '0'))))].sort((a, b) => b - a);
             const scoreToEffectivePlacement = new Map();
             let currentPlacement = 1;
             
             uniqueScores.forEach(score => {
               scoreToEffectivePlacement.set(score, currentPlacement);
-              const participantsWithThisScore = sortedBonusScores.filter(s => parseFloat(String(s.value || '0')) === score).length;
-              currentPlacement += participantsWithThisScore;
+              currentPlacement++; // Dense ranking: increment by 1 for each unique score
             });
 
             for (let i = 0; i < sortedBonusScores.length; i++) {
