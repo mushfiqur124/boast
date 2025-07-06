@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Settings, Save } from "lucide-react";
+import { Settings, Save, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -27,15 +27,68 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
   });
 
   const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
-    // Load scoring rules from localStorage for now
-    // In a full implementation, you might want to store these in the database
-    const savedRules = localStorage.getItem(`scoring_${competitionCode}`);
-    if (savedRules) {
-      setScoringRules(JSON.parse(savedRules));
+    loadScoringRules();
+  }, [competitionId]);
+
+  const loadScoringRules = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('scoring_rules')
+        .select('*')
+        .eq('competition_id', competitionId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+
+      if (data) {
+        setScoringRules({
+          teamWin: data.team_win_points,
+          teamLoss: data.team_loss_points,
+          firstPlace: data.first_place_bonus,
+          secondPlace: data.second_place_bonus,
+          lastPlace: data.last_place_penalty
+        });
+      } else {
+        // No scoring rules found, create default ones
+        await createDefaultScoringRules();
+      }
+    } catch (error) {
+      console.error('Error loading scoring rules:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load scoring rules. Using defaults.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  }, [competitionCode]);
+  };
+
+  const createDefaultScoringRules = async () => {
+    try {
+      const { error } = await supabase
+        .from('scoring_rules')
+        .insert({
+          competition_id: competitionId,
+          team_win_points: scoringRules.teamWin,
+          team_loss_points: scoringRules.teamLoss,
+          first_place_bonus: scoringRules.firstPlace,
+          second_place_bonus: scoringRules.secondPlace,
+          last_place_penalty: scoringRules.lastPlace
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error creating default scoring rules:', error);
+    }
+  };
 
   const updateRule = (key: keyof ScoringRules, value: string) => {
     const numValue = parseInt(value) || 0;
@@ -43,13 +96,216 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
     setHasChanges(true);
   };
 
-  const saveRules = () => {
-    localStorage.setItem(`scoring_${competitionCode}`, JSON.stringify(scoringRules));
-    setHasChanges(false);
-    toast({
-      title: "Scoring Rules Saved",
-      description: "Your scoring configuration has been updated",
-    });
+  const recalculateExistingScores = async (newRules: ScoringRules) => {
+    setRecalculating(true);
+    try {
+      // Get all completed activities and their scores
+      const { data: activities, error: activitiesError } = await supabase
+        .from('activities')
+        .select('id, type')
+        .eq('competition_id', competitionId)
+        .eq('completed', true);
+
+      if (activitiesError) throw activitiesError;
+
+      if (!activities || activities.length === 0) {
+        toast({
+          title: "No scores to recalculate",
+          description: "No completed activities found.",
+        });
+        return;
+      }
+
+      // For each activity, recalculate scores
+      for (const activity of activities) {
+        if (activity.type === 'team') {
+          // Update team competition scores
+          const { data: teamScores, error: teamScoresError } = await supabase
+            .from('scores')
+            .select('id, value, team_id')
+            .eq('activity_id', activity.id)
+            .eq('score_type', 'team')
+            .not('team_id', 'is', null);
+
+          if (teamScoresError) throw teamScoresError;
+
+                     if (teamScores) {
+             for (const score of teamScores) {
+               const isWinner = (typeof score.value === 'number' && score.value === 1) || 
+                                (typeof score.value === 'string' && score.value === '1');
+               const newPoints = isWinner ? newRules.teamWin : newRules.teamLoss;
+               
+               const { error: updateError } = await supabase
+                 .from('scores')
+                 .update({ points_earned: newPoints })
+                 .eq('id', score.id);
+
+               if (updateError) throw updateError;
+             }
+           }
+        } else if (activity.type === 'individual') {
+          // Update individual competition scores
+          const { data: individualScores, error: individualScoresError } = await supabase
+            .from('scores')
+            .select('id, value, score_type, team_id, participant_id')
+            .eq('activity_id', activity.id);
+
+          if (individualScoresError) throw individualScoresError;
+
+          if (individualScores) {
+                         // First, update team scores (win/loss)
+             const teamScores = individualScores.filter(s => s.score_type === 'team' && s.team_id);
+             for (const score of teamScores) {
+               const isWinner = (typeof score.value === 'number' && score.value === 1) || 
+                                (typeof score.value === 'string' && score.value === '1');
+               const newPoints = isWinner ? newRules.teamWin : newRules.teamLoss;
+              
+              const { error: updateError } = await supabase
+                .from('scores')
+                .update({ points_earned: newPoints })
+                .eq('id', score.id);
+
+              if (updateError) throw updateError;
+            }
+
+            // Then, update individual bonus scores
+            const bonusScores = individualScores.filter(s => s.score_type === 'individual' && s.participant_id);
+            
+            // Sort by individual_score to determine rankings
+            const sortedBonusScores = bonusScores.sort((a, b) => {
+              const aScore = parseFloat(String(a.value || '0'));
+              const bScore = parseFloat(String(b.value || '0'));
+              return bScore - aScore; // Higher scores first
+            });
+
+            // Calculate effective placements to handle ties properly
+            const uniqueScores = [...new Set(sortedBonusScores.map(s => parseFloat(String(s.value || '0'))))].sort((a, b) => b - a);
+            const scoreToEffectivePlacement = new Map();
+            let currentPlacement = 1;
+            
+            uniqueScores.forEach(score => {
+              scoreToEffectivePlacement.set(score, currentPlacement);
+              const participantsWithThisScore = sortedBonusScores.filter(s => parseFloat(String(s.value || '0')) === score).length;
+              currentPlacement += participantsWithThisScore;
+            });
+
+            for (let i = 0; i < sortedBonusScores.length; i++) {
+              const score = sortedBonusScores[i];
+              const scoreValue = parseFloat(String(score.value || '0'));
+              const effectivePlacement = scoreToEffectivePlacement.get(scoreValue);
+              const totalParticipants = sortedBonusScores.length;
+              let bonusPoints = 0;
+
+              if (effectivePlacement === 1 && totalParticipants > 1) {
+                bonusPoints = newRules.firstPlace; // First place (handles ties)
+              } else if (effectivePlacement === 2 && totalParticipants > 2) {
+                bonusPoints = newRules.secondPlace; // Second place (effectively second even if rank is 3 due to tie)
+              } else if (i === sortedBonusScores.length - 1 && totalParticipants > 2) {
+                bonusPoints = newRules.lastPlace; // Last place
+              }
+
+              const { error: updateError } = await supabase
+                .from('scores')
+                .update({ points_earned: bonusPoints })
+                .eq('id', score.id);
+
+              if (updateError) throw updateError;
+            }
+          }
+        }
+      }
+
+      // Recalculate team totals
+      await recalculateTeamTotals();
+
+      toast({
+        title: "Scores Recalculated",
+        description: "All existing scores have been updated with the new scoring rules.",
+      });
+
+    } catch (error) {
+      console.error('Error recalculating scores:', error);
+      toast({
+        title: "Error",
+        description: "Failed to recalculate existing scores. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const recalculateTeamTotals = async () => {
+    try {
+      // Get all teams for this competition
+      const { data: teams, error: teamsError } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('competition_id', competitionId);
+
+      if (teamsError) throw teamsError;
+
+      if (teams) {
+        for (const team of teams) {
+          // Calculate total score for this team
+          const { data: teamScores, error: scoresError } = await supabase
+            .from('scores')
+            .select('points_earned')
+            .eq('team_id', team.id);
+
+          if (scoresError) throw scoresError;
+
+          const totalScore = teamScores?.reduce((sum, score) => sum + score.points_earned, 0) || 0;
+
+          // Update team total
+          const { error: updateError } = await supabase
+            .from('teams')
+            .update({ total_score: totalScore })
+            .eq('id', team.id);
+
+          if (updateError) throw updateError;
+        }
+      }
+    } catch (error) {
+      console.error('Error recalculating team totals:', error);
+    }
+  };
+
+  const saveRules = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('scoring_rules')
+        .upsert({
+          competition_id: competitionId,
+          team_win_points: scoringRules.teamWin,
+          team_loss_points: scoringRules.teamLoss,
+          first_place_bonus: scoringRules.firstPlace,
+          second_place_bonus: scoringRules.secondPlace,
+          last_place_penalty: scoringRules.lastPlace
+        });
+
+      if (error) throw error;
+
+      setHasChanges(false);
+      
+      // Recalculate existing scores with new rules
+      await recalculateExistingScores(scoringRules);
+
+      toast({
+        title: "Scoring Rules Saved",
+        description: "Your scoring configuration has been updated and all scores recalculated.",
+      });
+    } catch (error) {
+      console.error('Error saving scoring rules:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save scoring rules. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resetToDefaults = () => {
@@ -63,6 +319,10 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
     setHasChanges(true);
   };
 
+  if (loading) {
+    return <div className="flex items-center justify-center p-8">Loading scoring configuration...</div>;
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -75,9 +335,13 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
           <p className="text-gray-600">Customize point values for your competition</p>
         </div>
         {hasChanges && (
-          <Button onClick={saveRules}>
-            <Save className="h-4 w-4 mr-2" />
-            Save Changes
+          <Button onClick={saveRules} disabled={saving}>
+            {saving ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         )}
       </div>

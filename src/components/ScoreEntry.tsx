@@ -81,14 +81,37 @@ const ScoreEntry = ({
   });
 
   useEffect(() => {
-    loadData();
-    loadScoringRules();
+    const initializeData = async () => {
+      await loadScoringRules();
+      await loadData();
+    };
+    initializeData();
   }, [competitionId, activity]);
 
-  const loadScoringRules = () => {
-    const savedRules = localStorage.getItem(`scoring_${competitionCode}`);
-    if (savedRules) {
-      setScoringRules(JSON.parse(savedRules));
+  const loadScoringRules = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('scoring_rules')
+        .select('*')
+        .eq('competition_id', competitionId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+
+      if (data) {
+        setScoringRules({
+          teamWin: data.team_win_points,
+          teamLoss: data.team_loss_points,
+          firstPlace: data.first_place_bonus,
+          secondPlace: data.second_place_bonus,
+          lastPlace: data.last_place_penalty
+        });
+      }
+    } catch (error) {
+      console.error('Error loading scoring rules:', error);
+      // Keep default values if loading fails
     }
   };
 
@@ -232,6 +255,17 @@ const ScoreEntry = ({
       });
     }
 
+    // Count how many participants have each unique score to determine effective placements
+    const uniqueScores = [...new Set(allParticipantScores.map(p => p.score))].sort((a, b) => b - a);
+    const scoreToEffectivePlacement = new Map();
+    let currentPlacement = 1;
+    
+    uniqueScores.forEach(score => {
+      scoreToEffectivePlacement.set(score, currentPlacement);
+      const participantsWithThisScore = allParticipantScores.filter(p => p.score === score).length;
+      currentPlacement += participantsWithThisScore;
+    });
+
     summaries.forEach(summary => {
       const individualBonuses: { participant: string; bonus: number; reason: string }[] = [];
       
@@ -241,18 +275,21 @@ const ScoreEntry = ({
         if (!participantRanking) return;
         
         const rank = participantRanking.rank;
+        const effectivePlacement = scoreToEffectivePlacement.get(participantRanking.score);
         const totalParticipants = allParticipantScores.length;
         
-        // Award bonuses based on rank, ensuring ties get the same bonus
-        if (rank === 1 && totalParticipants > 1) {
-          // First place bonus
+        // Award bonuses based on effective placement to handle ties properly
+        if (effectivePlacement === 1 && totalParticipants > 1) {
+          // First place bonus (handles ties for first)
           individualBonuses.push({
             participant: participant.name,
             bonus: scoringRules.firstPlace,
-            reason: "1st Place Overall"
+            reason: rank === 1 && allParticipantScores.filter(p => p.score === participantRanking.score).length > 1 
+              ? "1st Place Overall (Tied)" 
+              : "1st Place Overall"
           });
-        } else if (rank === 2 && totalParticipants > 2) {
-          // Second place bonus (only if there are more than 2 participants)
+        } else if (effectivePlacement === 2 && totalParticipants > 2) {
+          // Second place bonus (effectively second even if rank is 3 due to tie)
           individualBonuses.push({
             participant: participant.name,
             bonus: scoringRules.secondPlace,
