@@ -236,11 +236,12 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
   };
 
   const recalculateTeamTotals = async () => {
+    setRecalculating(true);
     try {
       // Get all teams for this competition
       const { data: teams, error: teamsError } = await supabase
         .from('teams')
-        .select('id')
+        .select('id, name')
         .eq('competition_id', competitionId);
 
       if (teamsError) throw teamsError;
@@ -266,8 +267,21 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
           if (updateError) throw updateError;
         }
       }
+
+      toast({
+        title: "Team Totals Fixed!",
+        description: "All team totals have been recalculated from scratch.",
+      });
+
     } catch (error) {
       console.error('Error recalculating team totals:', error);
+      toast({
+        title: "Error",
+        description: "Failed to recalculate team totals. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -345,6 +359,31 @@ const Scoring = ({ competitionCode, competitionId }: { competitionCode: string, 
           </Button>
         )}
       </div>
+
+      {/* Quick Fix Button */}
+      <Card className="bg-yellow-50 border-yellow-200">
+        <CardHeader>
+          <CardTitle className="text-yellow-800">Team Total Fix</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-yellow-700 mb-3">
+            If team totals seem incorrect, click below to recalculate them from scratch.
+          </p>
+          <Button 
+            onClick={recalculateTeamTotals} 
+            disabled={recalculating}
+            variant="outline"
+            className="border-yellow-300 text-yellow-800 hover:bg-yellow-100"
+          >
+            {recalculating ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            {recalculating ? 'Recalculating...' : 'Fix Team Totals'}
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Team Competition Scoring */}

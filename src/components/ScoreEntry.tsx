@@ -428,41 +428,8 @@ const ScoreEntry = ({
 
       if (activityError) throw activityError;
 
-      // Update team total scores
-      const teamUpdates: Record<string, number> = {};
-      
-      if (activity.type === 'team') {
-        if (useCustomScores) {
-          Object.entries(teamScores).forEach(([teamId, score]) => {
-            if (score > 0) teamUpdates[teamId] = score;
-          });
-        } else if (selectedWinnerTeam) {
-          teamUpdates[selectedWinnerTeam] = scoringRules.teamWin;
-          // Add losing team score if it's not zero
-          teams.forEach(team => {
-            if (team.id !== selectedWinnerTeam && scoringRules.teamLoss !== 0) {
-              teamUpdates[team.id] = scoringRules.teamLoss;
-            }
-          });
-        }
-      } else {
-        const teamSummaries = calculateTeamSummaries();
-        teamSummaries.forEach(summary => {
-          if (summary.final_points !== 0) {
-            teamUpdates[summary.team_id] = summary.final_points;
-          }
-        });
-      }
-
-      for (const [teamId, additionalPoints] of Object.entries(teamUpdates)) {
-        const currentTeam = teams.find(t => t.id === teamId);
-        if (currentTeam) {
-          await supabase
-            .from('teams')
-            .update({ total_score: currentTeam.total_score + additionalPoints })
-            .eq('id', teamId);
-        }
-      }
+      // Recalculate team totals from all scores (instead of incrementally adding)
+      await recalculateAllTeamTotals();
 
       toast({
         title: "Scores Saved!",
@@ -481,6 +448,33 @@ const ScoreEntry = ({
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Helper function to recalculate all team totals from scratch
+  const recalculateAllTeamTotals = async () => {
+    try {
+      for (const team of teams) {
+        // Calculate total score for this team from all scores
+        const { data: teamScores, error: scoresError } = await supabase
+          .from('scores')
+          .select('points_earned')
+          .eq('team_id', team.id);
+
+        if (scoresError) throw scoresError;
+
+        const totalScore = teamScores?.reduce((sum, score) => sum + score.points_earned, 0) || 0;
+
+        // Update team total
+        const { error: updateError } = await supabase
+          .from('teams')
+          .update({ total_score: totalScore })
+          .eq('id', team.id);
+
+        if (updateError) throw updateError;
+      }
+    } catch (error) {
+      console.error('Error recalculating team totals:', error);
     }
   };
 
