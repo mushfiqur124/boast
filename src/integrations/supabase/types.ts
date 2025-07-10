@@ -161,6 +161,50 @@ export type Database = {
           },
         ]
       }
+      scoring_rules: {
+        Row: {
+          competition_id: string
+          created_at: string | null
+          first_place_bonus: number
+          id: string
+          last_place_penalty: number
+          second_place_bonus: number
+          team_loss_points: number
+          team_win_points: number
+          updated_at: string | null
+        }
+        Insert: {
+          competition_id: string
+          created_at?: string | null
+          first_place_bonus?: number
+          id?: string
+          last_place_penalty?: number
+          second_place_bonus?: number
+          team_loss_points?: number
+          team_win_points?: number
+          updated_at?: string | null
+        }
+        Update: {
+          competition_id?: string
+          created_at?: string | null
+          first_place_bonus?: number
+          id?: string
+          last_place_penalty?: number
+          second_place_bonus?: number
+          team_loss_points?: number
+          team_win_points?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scoring_rules_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: true
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           captain: string

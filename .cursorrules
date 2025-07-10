@@ -164,9 +164,9 @@ try {
 ```
 
 ## Environment Setup
-- Copy `.env.example` to `.env` and configure with your Supabase credentials (for local development)
-- App includes backwards-compatible fallback credentials for Lovable compatibility
-- All environment variables are configured via .env file when available
+- Copy `.env.example` to `.env` and configure with your Supabase credentials (REQUIRED)
+- All environment variables must be configured via .env file for security
+- No fallback credentials - must use your own Supabase project
 - Use `npm run dev` for development
 - Database migrations are in `supabase/migrations/`
 
